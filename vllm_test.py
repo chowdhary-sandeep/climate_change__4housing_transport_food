@@ -1,10 +1,12 @@
 """
 vLLM Server Test - Classifier for Survey Questions
-Uses the same fake samples as sample_local_llm.py but connects to vLLM server
-vLLM server runs on localhost:8000 (as configured in run_vllm_server.bat)
+Standalone script that connects to vLLM server for survey question classification.
+vLLM server runs on localhost:8000-8003 (multiple models on different ports)
 
 Optimized for maximum throughput using async requests and continuous batching.
 vLLM automatically batches concurrent requests together for efficient processing.
+
+This script is standalone and includes all necessary functions and data.
 """
 
 import json
@@ -25,70 +27,1313 @@ import os
 import pandas as pd
 import random
 
-# Import functions and data from sample_local_llm.py
-from sample_local_llm import (
-    get_default_questions,
-    load_survey_questions,
-    load_survey_questions_by_sector,
-    get_questions_for_sector,
-    SAMPLE_STATEMENTS,
-    GROUND_TRUTH,
-    RESPONSE_SCHEMA,
-    create_relevance_prompt,
-    create_relevance_prompt_grouped,
-    create_classification_prompt,
-    check_relevance,
-    classify_statement_against_question,
-    check_relevance_task,
-    check_relevance_grouped,
-    classify_single_task,
-    first_pass_relevance,
-    second_pass_classification,
-    group_related_questions,
-    calculate_coherence,
-    get_majority_vote,
-    save_results_csv,
-    calculate_metrics,
-    save_metrics_csv,
-    print_metrics,
-    print_relevance_percentages
-)
-
 # Load API configuration (for endpoint structure)
 with open('paper4_LOCAL_LLMS_api.json', 'r') as f:
     api_config = json.load(f)
 
-# vLLM Server Configuration - Multiple Models Available
-# Available models running on different ports
-AVAILABLE_MODELS = {
-    "1": {
-        "name": "qwen2.5-3b",
-        "base_url": "http://127.0.0.1:8000",
-        "model_name": "qwen2.5-3b",
-        "description": "Qwen2.5-3B-Instruct (port 8000)"
+# ============================================================================
+# Survey Questions and Sample Data (standalone - no dependency on sample_local_llm.py)
+# ============================================================================
+
+def get_default_questions() -> Dict:
+    """Return default hardcoded survey questions"""
+    return {
+    "Local_Economy_Help": {
+        "question": "Would installing a wind or solar power development in your community help your local economy?",
+        "description": "Belief that nearby wind/solar project would help local economy. Cues: 'help local economy', 'jobs', 'boost', 'economic growth'."
     },
-    "2": {
-        "name": "qwen3-1p7b",
-        "base_url": "http://127.0.0.1:8001",
-        "model_name": "qwen3-1p7b",
-        "description": "Qwen3 1.7B (port 8001)"
+    "Local_Economy_Hurt": {
+        "question": "Would installing a wind or solar power development in your community hurt your local economy?",
+        "description": "Belief that nearby wind/solar project would hurt local economy. Cues: 'hurt local economy', 'harm', 'negative impact', 'economic decline'."
     },
-    "3": {
-        "name": "gemma2-2b",
-        "base_url": "http://127.0.0.1:8002",
-        "model_name": "gemma-2-2b-it",
-        "description": "Gemma 2 2B Instruct (port 8002)"
+    "Local_Economy_No_Difference": {
+        "question": "Would installing a wind or solar power development in your community make no difference to your local economy?",
+        "description": "Belief that nearby wind/solar project would make no difference to local economy. Cues: 'make no difference', 'no impact', 'neutral'."
     },
-    "4": {
-        "name": "mistral3-3b",
-        "base_url": "http://127.0.0.1:8003",
-        "model_name": "mistral3-3b",
-        "description": "Mistral MiniStral 3 3B (port 8003)"
+    "Landscape_Unattractive": {
+        "question": "Would installing a wind or solar power development in your community make the landscape unattractive?",
+        "description": "Belief that project would make landscape unattractive. Cues: 'ugly', 'ruin the view', 'eyesore', 'unattractive', 'aesthetic harm'."
+    },
+    "Landscape_Not_Unattractive": {
+        "question": "Would installing a wind or solar power development in your community NOT make the landscape unattractive?",
+        "description": "Belief that project would NOT harm landscape aesthetics. Cues: 'would not make unattractive', 'beautiful', 'aesthetic benefit'."
+    },
+    "Space_Too_Much": {
+        "question": "Would installing a wind or solar power development in your community take up too much space?",
+        "description": "Concern that project takes too much space. Cues: 'take up too much space', 'footprint', 'land use', 'too large'."
+    },
+    "Space_Acceptable": {
+        "question": "Would installing a wind or solar power development in your community NOT take up too much space?",
+        "description": "Belief that space taken is acceptable. Cues: 'would not take too much space', 'reasonable footprint', 'acceptable size'."
+    },
+    "Utility_Bill_Lower": {
+        "question": "Would installing a wind or solar power development in your community lower the price you pay for electricity?",
+        "description": "Expectation that local renewables will lower electricity bills. Cues: 'lower my bill', 'cheaper power', 'reduce costs', 'savings'."
+    },
+    "Utility_Bill_Higher": {
+        "question": "Would installing a wind or solar power development in your community raise the price you pay for electricity?",
+        "description": "Expectation that local renewables will raise electricity bills. Cues: 'higher bills', 'more expensive power', 'cost increase'."
+    },
+    "Tax_Revenue_Help": {
+        "question": "Would installing a wind or solar power development in your community help local tax revenue?",
+        "description": "Belief that project will boost local tax revenue. Cues: 'tax revenue', 'municipal income', 'local taxes', 'revenue boost'."
     }
 }
 
-# Default model (can be overridden via command line or selection)
-DEFAULT_MODEL_KEY = "1"
+def load_survey_questions(use_real_survey_questions: bool = False) -> Dict:
+    """Load survey questions from JSON file or use default hardcoded questions"""
+    if use_real_survey_questions:
+        # Load from survey_question.json
+        if not os.path.exists('survey_question.json'):
+            print("Error: survey_question.json not found. Using default questions.")
+            return get_default_questions()
+        
+        with open('survey_question.json', 'r', encoding='utf-8') as f:
+            survey_data = json.load(f)
+        
+        # Flatten the nested structure (Food, Housing, Energy) into a single dict
+        flattened = {}
+        for sector, questions in survey_data.items():
+            for question_id, question_info in questions.items():
+                # Keep the question_id as-is, or prefix with sector if needed
+                flattened[question_id] = question_info
+        
+        print(f"Loaded {len(flattened)} questions from survey_question.json")
+        print(f"Sectors: {', '.join(survey_data.keys())}")
+        return flattened
+    else:
+        return get_default_questions()
+
+# Generate sample statements about wind and solar power (including vague and irrelevant ones)
+SAMPLE_STATEMENTS = [
+    # Clear, relevant statements
+    "Installing a solar farm in our town would create hundreds of local jobs and boost our economy.",
+    "Those wind turbines are an eyesore and completely ruin the beautiful countryside view.",
+    "I'm not sure if a solar panel farm would really help or hurt our local economy - it's hard to say.",
+    "The solar development takes up way too much farmland that we need for agriculture.",
+    "Having renewable energy nearby would definitely lower my electricity bills, which is great.",
+    "I'm worried that building a wind farm will increase our electricity costs because of infrastructure expenses.",
+    "The new solar panels on the community center look great and don't detract from the area at all.",
+    "A wind farm would bring in significant tax revenue for our county, helping fund schools and roads.",
+    "I don't think a solar development would make any real difference to our local economy one way or another.",
+    "The space used for the solar farm is reasonable compared to the benefits we'll get from clean energy.",
+    # More clear examples
+    "Solar panels on rooftops are becoming more common in our neighborhood.",
+    "Wind energy is clean and doesn't pollute the air like coal plants do.",
+    "The construction of the wind farm disrupted local wildlife habitats significantly.",
+    "Our electricity rates went down after the solar project started operating.",
+    "The solar installation created about 50 construction jobs for local workers.",
+    # Vague/ambiguous statements
+    "Renewable energy is interesting, I guess.",
+    "Some people like solar, others don't really care about it.",
+    "Energy projects can have various impacts on communities.",
+    "It depends on how you look at it, really.",
+    "There are pros and cons to everything.",
+    # Irrelevant statements (not about wind/solar development)
+    "I went to the grocery store yesterday and bought some apples.",
+    "The weather has been really nice this week.",
+    "My favorite TV show is on tonight.",
+    "Traffic was terrible on the highway this morning.",
+    "I'm thinking about renovating my kitchen next year.",
+    # Borderline relevant (tangentially related)
+    "Climate change is a serious issue that needs addressing.",
+    "Electric cars are becoming more popular these days.",
+    "I read an article about energy policy in the newspaper.",
+    "The government should invest more in infrastructure.",
+    "Technology is advancing rapidly in many fields."
+]
+
+# Ground truth labels: {statement_index: {question_id: 'yes'/'no'}}
+GROUND_TRUTH = {
+    0: {  # "Installing a solar farm in our town would create hundreds of local jobs and boost our economy."
+        "Local_Economy_Help": "yes",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    1: {  # "Those wind turbines are an eyesore and completely ruin the beautiful countryside view."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "yes",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    2: {  # "I'm not sure if a solar panel farm would really help or hurt our local economy - it's hard to say."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "yes",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    3: {  # "The solar development takes up way too much farmland that we need for agriculture."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "yes",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    4: {  # "Having renewable energy nearby would definitely lower my electricity bills, which is great."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "yes",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    5: {  # "I'm worried that building a wind farm will increase our electricity costs because of infrastructure expenses."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "yes",
+        "Tax_Revenue_Help": "no"
+    },
+    6: {  # "The new solar panels on the community center look great and don't detract from the area at all."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "yes",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    7: {  # "A wind farm would bring in significant tax revenue for our county, helping fund schools and roads."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "yes"
+    },
+    8: {  # "I don't think a solar development would make any real difference to our local economy one way or another."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "yes",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    9: {  # "The space used for the solar farm is reasonable compared to the benefits we'll get from clean energy."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "yes",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    10: {  # "Solar panels on rooftops are becoming more common in our neighborhood."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "yes",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "yes",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    11: {  # "Wind energy is clean and doesn't pollute the air like coal plants do."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    12: {  # "The construction of the wind farm disrupted local wildlife habitats significantly."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "yes",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "yes",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    13: {  # "Our electricity rates went down after the solar project started operating."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "yes",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    14: {  # "The solar installation created about 50 construction jobs for local workers."
+        "Local_Economy_Help": "yes",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    15: {  # "Renewable energy is interesting, I guess." - Vague
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    16: {  # "Some people like solar, others don't really care about it." - Vague
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    17: {  # "Energy projects can have various impacts on communities." - Vague
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    18: {  # "It depends on how you look at it, really." - Vague
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    19: {  # "There are pros and cons to everything." - Vague
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    20: {  # "I went to the grocery store yesterday and bought some apples." - Irrelevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    21: {  # "The weather has been really nice this week." - Irrelevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    22: {  # "My favorite TV show is on tonight." - Irrelevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    23: {  # "Traffic was terrible on the highway this morning." - Irrelevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    24: {  # "I'm thinking about renovating my kitchen next year." - Irrelevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    25: {  # "Climate change is a serious issue that needs addressing." - Borderline relevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    26: {  # "Electric cars are becoming more popular these days." - Borderline relevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    27: {  # "I read an article about energy policy in the newspaper." - Borderline relevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    28: {  # "The government should invest more in infrastructure." - Borderline relevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    29: {  # "Technology is advancing rapidly in many fields." - Borderline relevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    }
+}
+
+# JSON Schema for API response validation
+RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "relevant": {
+            "type": "string",
+            "enum": ["yes", "no"]
+        }
+    },
+    "required": ["relevant"],
+    "additionalProperties": False
+}
+
+def group_related_questions(questions: Dict) -> Dict[str, List[Tuple[str, Dict]]]:
+    """
+    Group related questions by their base topic.
+    Questions like "Local_Economy_Help" and "Local_Economy_Hurt" are grouped together
+    since they share the same base topic "Local_Economy".
+    
+    Handles special cases like:
+    - "Landscape_Unattractive" and "Landscape_Not_Unattractive" -> both grouped as "Landscape"
+    - "Space_Too_Much" and "Space_Acceptable" -> both grouped as "Space"
+    
+    Returns:
+        Dictionary mapping base_topic -> list of (question_id, question_info) tuples
+    """
+    # Define variant suffixes that should be stripped to find the base topic
+    variant_suffixes = [
+        '_Help', '_Hurt', '_No_Difference',
+        '_Lower', '_Higher',
+        '_Unattractive', '_Not_Unattractive',
+        '_Too_Much', '_Acceptable'
+    ]
+    
+    groups = {}
+    for question_id, question_info in questions.items():
+        # Try to find base topic by removing known variant suffixes
+        base_topic = question_id
+        for suffix in variant_suffixes:
+            if question_id.endswith(suffix):
+                base_topic = question_id[:-len(suffix)]
+                break
+        
+        # If no variant suffix matched, try splitting on last underscore as fallback
+        if base_topic == question_id:
+            parts = question_id.split('_')
+            if len(parts) > 1:
+                base_topic = '_'.join(parts[:-1])
+        
+        if base_topic not in groups:
+            groups[base_topic] = []
+        groups[base_topic].append((question_id, question_info))
+    
+    return groups
+
+def create_relevance_prompt(statement: str, question_info: Dict) -> str:
+    """Create prompt for first pass: determine if statement is relevant to question"""
+    prompt = f"""Please determine if this statement is relevant to the survey question below.
+
+Survey Question: {question_info['question']}
+
+Statement: "{statement}"
+
+Is this statement relevant to the survey question? Does it express an opinion, belief, or concern related to this question?
+
+Please respond with valid JSON:
+{{
+  "relevant": "yes"  // or "no"
+}}
+
+- "yes" if the statement is relevant to this survey question
+- "no" if the statement is not relevant to this survey question
+
+Response (JSON only):"""
+    return prompt
+
+def create_relevance_prompt_grouped(statement: str, grouped_questions: List[Tuple[str, Dict]]) -> str:
+    """
+    Create prompt for first pass: determine if statement is relevant to a group of related questions.
+    This is more efficient than checking each question separately.
+    
+    Args:
+        statement: The statement to check
+        grouped_questions: List of (question_id, question_info) tuples for related questions
+    
+    Returns:
+        Prompt string
+    """
+    questions_text = "\n".join([
+        f"- {q_info['question']}" for _, q_info in grouped_questions
+    ])
+    
+    prompt = f"""Please determine if this statement is relevant to ANY of the following related survey questions.
+
+Related Survey Questions:
+{questions_text}
+
+Statement: "{statement}"
+
+Is this statement relevant to any of these survey questions? Does it express an opinion, belief, or concern related to any of these questions?
+
+Please respond with valid JSON:
+{{
+  "relevant": "yes"  // or "no"
+}}
+
+- "yes" if the statement is relevant to any of these survey questions
+- "no" if the statement is not relevant to any of these survey questions
+
+Response (JSON only):"""
+    return prompt
+
+def create_classification_prompt(statement: str, question_info: Dict) -> str:
+    """Create prompt for second pass: detailed classification (only for relevant statements)"""
+    prompt = f"""Please classify this statement about wind and solar power development.
+
+Survey Question: {question_info['question']}
+
+Question Description: {question_info['description']}
+
+Statement to classify: "{statement}"
+
+This statement has been identified as relevant to the survey question above. Now determine: Does this statement express support for, agreement with, or alignment with this survey question?
+
+Please respond with valid JSON in the following format:
+{{
+  "relevant": "yes"  // or "no"
+}}
+
+- Please use "yes" if the statement supports, agrees with, or aligns with this survey question
+- Please use "no" if the statement does not support, contradicts, or is not aligned with this survey question
+
+Response (JSON only):"""
+    return prompt
+
+def check_relevance(statement: str, question_id: str, question_info: Dict, 
+                    model_config: Dict, base_url: str = "http://127.0.0.1:1234") -> Tuple[str, str]:
+    """
+    First pass: Check if statement is relevant to question
+    
+    Returns:
+        Tuple of (question_id, response) where response is 'yes', 'no', or 'error'
+    """
+    prompt = create_relevance_prompt(statement, question_info)
+    # Note: This function is kept for compatibility but not used in vLLM version
+    # vLLM uses async versions instead
+    return (question_id, 'error')
+
+def classify_statement_against_question(statement: str, question_id: str, question_info: Dict, 
+                                        model_config: Dict, base_url: str = "http://127.0.0.1:1234") -> Tuple[str, str]:
+    """
+    Second pass: Classify a relevant statement against a survey question
+    
+    Returns:
+        Tuple of (question_id, response) where response is 'yes', 'no', or 'error'
+    """
+    prompt = create_classification_prompt(statement, question_info)
+    # Note: This function is kept for compatibility but not used in vLLM version
+    # vLLM uses async versions instead
+    return (question_id, 'error')
+
+def check_relevance_grouped(statement: str, grouped_questions: List[Tuple[str, Dict]], 
+                            model_config: Dict, base_url: str = "http://127.0.0.1:1234") -> Dict[str, str]:
+    """
+    First pass: Check if statement is relevant to a group of related questions.
+    Returns the same relevance result for all questions in the group.
+    
+    Returns:
+        Dictionary mapping question_id -> 'yes'/'no'/'error'
+    """
+    prompt = create_relevance_prompt_grouped(statement, grouped_questions)
+    # Note: This function is kept for compatibility but not used in vLLM version
+    # vLLM uses async versions instead
+    return {question_id: 'error' for question_id, _ in grouped_questions}
+
+def check_relevance_task(args: Tuple) -> Tuple[int, str, str]:
+    """First pass: Check relevance of a single statement-question pair"""
+    # Note: This function is kept for compatibility but not used in vLLM version
+    stmt_idx, statement, question_id, question_info, model_config, base_url = args
+    return (stmt_idx, question_id, 'error')
+
+def classify_single_task(args: Tuple) -> Tuple[int, str, str]:
+    """Second pass: Classify a relevant statement-question pair"""
+    # Note: This function is kept for compatibility but not used in vLLM version
+    stmt_idx, statement, question_id, question_info, model_config, base_url = args
+    return (stmt_idx, question_id, 'error')
+
+def first_pass_relevance(statements: List[str], questions: Dict, 
+                        model_config: Dict, base_url: str = "http://127.0.0.1:1234",
+                        max_workers: int = 50) -> Dict:
+    """
+    First pass: Determine relevance of all statements to all questions
+    Uses grouped questions to reduce API calls (e.g., Help/Hurt variants checked together)
+    
+    Note: This function is kept for compatibility but not used in vLLM version.
+    vLLM uses async versions instead.
+    
+    Returns:
+        Dictionary with structure: {statement_index: {question_id: 'yes'/'no'/'error'}}
+    """
+    # Return empty results - vLLM version uses async functions
+    results = {}
+    for stmt_idx in range(len(statements)):
+        results[stmt_idx] = {}
+        for question_id in questions.keys():
+            results[stmt_idx][question_id] = 'error'
+    return results
+
+def second_pass_classification(statements: List[str], questions: Dict, relevance_results: Dict,
+                              model_config: Dict, base_url: str = "http://127.0.0.1:1234",
+                              max_workers: int = 50) -> Dict:
+    """
+    Second pass: Detailed classification only for statements marked as relevant
+    
+    Note: This function is kept for compatibility but not used in vLLM version.
+    vLLM uses async versions instead.
+    
+    Returns:
+        Dictionary with structure: {statement_index: {question_id: 'yes'/'no'/'error'}}
+    """
+    # Return empty results - vLLM version uses async functions
+    results = {}
+    for stmt_idx in range(len(statements)):
+        results[stmt_idx] = {}
+        for question_id in questions.keys():
+            results[stmt_idx][question_id] = 'error'
+    return results
+
+def calculate_coherence(responses: List[str]) -> float:
+    """Calculate coherence as percentage of majority label / total models"""
+    if not responses:
+        return 0.0
+    
+    # Count occurrences of each response (excluding errors)
+    valid_responses = [r for r in responses if r != 'error']
+    if not valid_responses:
+        return 0.0
+    
+    counts = Counter(valid_responses)
+    majority_count = max(counts.values())
+    total_models = len(responses)
+    
+    # Coherence = majority count / total models
+    coherence = (majority_count / total_models) * 100.0
+    return round(coherence, 2)
+
+def get_majority_vote(responses: List[str]) -> str:
+    """Get majority vote from responses (excluding errors)"""
+    valid_responses = [r for r in responses if r != 'error']
+    if not valid_responses:
+        return 'error'
+    counts = Counter(valid_responses)
+    return counts.most_common(1)[0][0]
+
+def save_results_csv(all_results: Dict[str, Dict], statements: List[str], questions: Dict, filename: str = "sample_local_llm_results.csv", has_ground_truth: bool = True, statement_to_original_index: Dict[int, int] = None):
+    """
+    Save results to CSV file with statement text, model classifications, ground truth (if available), and coherence
+    
+    Args:
+        statement_to_original_index: Optional mapping from resampled statement index to original index.
+                                    Used when statements have been resampled and ground truth indices need to be mapped.
+    """
+    import csv
+    
+    question_ids = list(questions.keys())
+    model_names = list(all_results.keys())
+    
+    # Create CSV with header: Statement, Question, Ground_Truth (if available), Model1, Model2, Model3, Coherence
+    fieldnames = ['Statement', 'Question']
+    if has_ground_truth:
+        fieldnames.append('Ground_Truth')
+    fieldnames.extend([model_name for model_name in model_names])
+    fieldnames.append('Coherence')
+    
+    with open(filename, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        
+        # Write results for each statement-question pair
+        for stmt_idx, statement in enumerate(statements):
+            for question_id in question_ids:
+                row = {
+                    'Statement': statement,
+                    'Question': question_id
+                }
+                
+                # Get ground truth (if available)
+                if has_ground_truth:
+                    # Use mapping if provided (for resampled statements), otherwise use stmt_idx directly
+                    original_idx = statement_to_original_index.get(stmt_idx, stmt_idx) if statement_to_original_index else stmt_idx
+                    ground_truth = GROUND_TRUTH.get(original_idx, {}).get(question_id, 'unknown')
+                    row['Ground_Truth'] = ground_truth
+                
+                # Get classification from each model
+                responses = []
+                for model_name in model_names:
+                    model_result = all_results[model_name].get(stmt_idx, {})
+                    response = model_result.get(question_id, 'error')
+                    row[model_name] = response
+                    responses.append(response)
+                
+                # Calculate coherence
+                coherence = calculate_coherence(responses)
+                row['Coherence'] = coherence
+                
+                writer.writerow(row)
+    
+    print(f"Results saved to {filename}")
+
+def save_results_json(all_results: Dict[str, Dict], statements: List[str], questions: Dict, 
+                      filename: str = "results.json"):
+    """
+    Save results to JSON file with comments as keys and all model labels grouped together.
+    Structure: {comment_text: {model_name: {question_id: response}}}
+    
+    Args:
+        all_results: Dictionary with structure {model_name: {statement_index: {question_id: response}}}
+        statements: List of statement/comment strings
+        questions: Dictionary of questions
+        filename: Output JSON filename
+    """
+    question_ids = list(questions.keys())
+    model_names = list(all_results.keys())
+    
+    # Build JSON structure: {comment_text: {model_name: {question_id: response}}}
+    results_json = {}
+    
+    for stmt_idx, statement in enumerate(statements):
+        comment_results = {}
+        for model_name in model_names:
+            model_result = all_results[model_name].get(stmt_idx, {})
+            question_responses = {}
+            for question_id in question_ids:
+                response = model_result.get(question_id, 'error')
+                question_responses[question_id] = response
+            comment_results[model_name] = question_responses
+        results_json[statement] = comment_results
+    
+    # Save to JSON file
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(results_json, f, ensure_ascii=False, indent=2)
+    
+    print(f"Results saved to {filename}")
+
+def save_results_json_relevant_only(all_results: Dict[str, Dict], statements: List[str], questions: Dict,
+                                    relevance_results: Dict[int, Dict[str, str]], 
+                                    filename: str = "results_relevant_only.json"):
+    """
+    Save results to JSON file, but only for statements that are relevant to at least one question.
+    Structure: {comment_text: {model_name: {question_id: response}}}
+    
+    Args:
+        all_results: Dictionary with structure {model_name: {statement_index: {question_id: response}}}
+        statements: List of statement/comment strings
+        questions: Dictionary of questions
+        relevance_results: Dictionary with structure {statement_index: {question_id: 'yes'/'no'/'error'}}
+        filename: Output JSON filename
+    """
+    question_ids = list(questions.keys())
+    model_names = list(all_results.keys())
+    
+    # Find relevant statement indices (statements with at least one "yes" in relevance_results)
+    relevant_stmt_indices = set()
+    for stmt_idx in relevance_results:
+        for question_id in question_ids:
+            if relevance_results[stmt_idx].get(question_id) == 'yes':
+                relevant_stmt_indices.add(stmt_idx)
+                break  # Only need one "yes" to be considered relevant
+    
+    if not relevant_stmt_indices:
+        print(f"No relevant statements found. Skipping {filename}")
+        return
+    
+    # Build JSON structure: {comment_text: {model_name: {question_id: response}}}
+    results_json = {}
+    
+    for stmt_idx in relevant_stmt_indices:
+        if stmt_idx >= len(statements):
+            continue
+        statement = statements[stmt_idx]
+        comment_results = {}
+        for model_name in model_names:
+            model_result = all_results[model_name].get(stmt_idx, {})
+            question_responses = {}
+            for question_id in question_ids:
+                response = model_result.get(question_id, 'error')
+                question_responses[question_id] = response
+            comment_results[model_name] = question_responses
+        results_json[statement] = comment_results
+    
+    # Save to JSON file
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(results_json, f, ensure_ascii=False, indent=2)
+    
+    print(f"Relevant-only results saved to {filename} ({len(relevant_stmt_indices)} relevant statements)")
+
+def save_results_csv_relevant_only(all_results: Dict[str, Dict], statements: List[str], questions: Dict, 
+                                   relevance_results: Dict[int, Dict[str, str]], 
+                                   filename: str = "sample_local_llm_results_relevant_only.csv", 
+                                   has_ground_truth: bool = True, 
+                                   statement_to_original_index: Dict[int, int] = None):
+    """
+    Save results to CSV file, but only for statements that are relevant to at least one question.
+    A statement is considered relevant if at least one question has "yes" in relevance_results.
+    
+    Args:
+        relevance_results: Dictionary with structure {statement_index: {question_id: 'yes'/'no'/'error'}}
+        statement_to_original_index: Optional mapping from resampled statement index to original index.
+                                    Used when statements have been resampled and ground truth indices need to be mapped.
+    """
+    import csv
+    
+    question_ids = list(questions.keys())
+    model_names = list(all_results.keys())
+    
+    # Find relevant statement indices (statements with at least one "yes" in relevance_results)
+    relevant_stmt_indices = set()
+    for stmt_idx in relevance_results:
+        for question_id in question_ids:
+            if relevance_results[stmt_idx].get(question_id) == 'yes':
+                relevant_stmt_indices.add(stmt_idx)
+                break  # Only need one "yes" to be considered relevant
+    
+    if not relevant_stmt_indices:
+        print(f"No relevant statements found. Skipping {filename}")
+        return
+    
+    # Create CSV with header: Statement, Question, Ground_Truth (if available), Model1, Model2, Model3, Coherence
+    fieldnames = ['Statement', 'Question']
+    if has_ground_truth:
+        fieldnames.append('Ground_Truth')
+    fieldnames.extend([model_name for model_name in model_names])
+    fieldnames.append('Coherence')
+    
+    with open(filename, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        
+        # Write results only for relevant statements
+        for stmt_idx in relevant_stmt_indices:
+            if stmt_idx >= len(statements):
+                continue
+            statement = statements[stmt_idx]
+            for question_id in question_ids:
+                row = {
+                    'Statement': statement,
+                    'Question': question_id
+                }
+                
+                # Get ground truth (if available)
+                if has_ground_truth:
+                    # Use mapping if provided (for resampled statements), otherwise use stmt_idx directly
+                    original_idx = statement_to_original_index.get(stmt_idx, stmt_idx) if statement_to_original_index else stmt_idx
+                    ground_truth = GROUND_TRUTH.get(original_idx, {}).get(question_id, 'unknown')
+                    row['Ground_Truth'] = ground_truth
+                
+                # Get classification from each model
+                responses = []
+                for model_name in model_names:
+                    model_result = all_results[model_name].get(stmt_idx, {})
+                    response = model_result.get(question_id, 'error')
+                    row[model_name] = response
+                    responses.append(response)
+                
+                # Calculate coherence
+                coherence = calculate_coherence(responses)
+                row['Coherence'] = coherence
+                
+                writer.writerow(row)
+    
+    print(f"Relevant-only results saved to {filename} ({len(relevant_stmt_indices)} relevant statements)")
+
+def calculate_metrics(all_results: Dict[str, Dict], statements: List[str], questions: Dict, has_ground_truth: bool = True, statement_to_original_index: Dict[int, int] = None) -> Dict:
+    """
+    Calculate accuracy (if ground truth available) and coherence metrics
+    
+    Args:
+        statement_to_original_index: Optional mapping from resampled statement index to original index.
+                                    Used when statements have been resampled and ground truth indices need to be mapped.
+    """
+    question_ids = list(questions.keys())
+    model_names = list(all_results.keys())
+    
+    total_pairs = len(statements) * len(question_ids)
+    
+    # Initialize counters
+    model_correct = {model_name: 0 for model_name in model_names}
+    majority_correct = 0
+    coherence_correct = []
+    coherence_wrong = []
+    coherence_all = []
+    
+    # Track accuracy by question type
+    question_stats = {q_id: {'total': 0, 'correct': {model_name: 0 for model_name in model_names}, 'majority_correct': 0} 
+                      for q_id in question_ids}
+    
+    # Process each statement-question pair
+    for stmt_idx in range(len(statements)):
+        for question_id in question_ids:
+            # Get responses from all models
+            responses = []
+            for model_name in model_names:
+                model_result = all_results[model_name].get(stmt_idx, {})
+                response = model_result.get(question_id, 'error')
+                responses.append(response)
+            
+            # Calculate coherence (always calculated)
+            coherence = calculate_coherence(responses)
+            coherence_all.append(coherence)
+            
+            # Accuracy calculations only if ground truth is available
+            if has_ground_truth:
+                # Use mapping if provided (for resampled statements), otherwise use stmt_idx directly
+                original_idx = statement_to_original_index.get(stmt_idx, stmt_idx) if statement_to_original_index else stmt_idx
+                ground_truth = GROUND_TRUTH.get(original_idx, {}).get(question_id, 'unknown')
+                if ground_truth == 'unknown':
+                    continue
+                
+                # Update question stats
+                question_stats[question_id]['total'] += 1
+                
+                # Check if each model is correct
+                for model_name, response in zip(model_names, responses):
+                    if response == ground_truth:
+                        model_correct[model_name] += 1
+                        question_stats[question_id]['correct'][model_name] += 1
+                
+                # Check majority vote
+                majority = get_majority_vote(responses)
+                if majority == ground_truth:
+                    majority_correct += 1
+                    question_stats[question_id]['majority_correct'] += 1
+                    coherence_correct.append(coherence)
+                else:
+                    coherence_wrong.append(coherence)
+    
+    # Calculate percentages
+    metrics = {
+        'total_pairs': total_pairs,
+        'has_ground_truth': has_ground_truth,
+        'total_coherence': sum(coherence_all) / len(coherence_all) if coherence_all else 0,
+    }
+    
+    # Add accuracy metrics only if ground truth is available
+    if has_ground_truth:
+        metrics['model_accuracy'] = {model_name: (model_correct[model_name] / total_pairs * 100) 
+                                       for model_name in model_names}
+        metrics['majority_accuracy'] = (majority_correct / total_pairs * 100) if total_pairs > 0 else 0
+        metrics['coherence_when_correct'] = sum(coherence_correct) / len(coherence_correct) if coherence_correct else 0
+        metrics['coherence_when_wrong'] = sum(coherence_wrong) / len(coherence_wrong) if coherence_wrong else 0
+        
+        # Calculate accuracy by question
+        metrics['accuracy_by_question'] = {}
+        for question_id, stats in question_stats.items():
+            if stats['total'] > 0:
+                metrics['accuracy_by_question'][question_id] = {
+                    'total': stats['total'],
+                    'model_accuracy': {model_name: (stats['correct'][model_name] / stats['total'] * 100) 
+                                       for model_name in model_names},
+                    'majority_accuracy': (stats['majority_correct'] / stats['total'] * 100) if stats['total'] > 0 else 0
+                }
+    
+    return metrics
+
+def save_metrics_csv(metrics: Dict, filename: str = "sample_local_llm_metrics.csv"):
+    """Save metrics to CSV file"""
+    import csv
+    
+    with open(filename, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Metric', 'Value'])
+        writer.writerow(['Total Pairs', metrics['total_pairs']])
+        writer.writerow(['Total Coherence (%)', round(metrics['total_coherence'], 2)])
+        
+        # Only include accuracy metrics if ground truth is available
+        if metrics.get('has_ground_truth', True):
+            writer.writerow(['Majority Accuracy (%)', round(metrics['majority_accuracy'], 2)])
+            writer.writerow(['Coherence When Correct (%)', round(metrics['coherence_when_correct'], 2)])
+            writer.writerow(['Coherence When Wrong (%)', round(metrics['coherence_when_wrong'], 2)])
+            
+            for model_name, accuracy in metrics['model_accuracy'].items():
+                writer.writerow([f'{model_name} Accuracy (%)', round(accuracy, 2)])
+    
+    print(f"Metrics saved to {filename}")
+
+def print_metrics(metrics: Dict):
+    """Print condensed metrics"""
+    print("\n" + "="*70)
+    print("CLASSIFICATION METRICS (Step 2)")
+    print("="*70)
+    
+    if metrics.get('has_ground_truth', True):
+        model_names = list(metrics['model_accuracy'].keys())
+        
+        # Overall accuracy (condensed)
+        print(f"{'Overall Accuracy':<35} " + " ".join([f"{m.split('/')[-1][:12]:>12}" for m in model_names]) + f" {'Majority':>10}")
+        print("-" * 70)
+        row = f"{'':<35} "
+        for model_name in model_names:
+            row += f"{metrics['model_accuracy'][model_name]:>11.1f}%"
+        row += f" {metrics['majority_accuracy']:>9.1f}%"
+        print(row)
+        
+        # Accuracy by question (condensed table)
+        if 'accuracy_by_question' in metrics and metrics['accuracy_by_question']:
+            print("\n" + "-" * 70)
+            print("ACCURACY BY QUESTION")
+            print("-" * 70)
+            print(f"{'Question':<35} " + " ".join([f"{m.split('/')[-1][:12]:>12}" for m in model_names]) + f" {'Majority':>10}")
+            print("-" * 70)
+            
+            for question_id, q_metrics in sorted(metrics['accuracy_by_question'].items()):
+                row = f"{question_id:<35} "
+                for model_name in model_names:
+                    acc = q_metrics['model_accuracy'].get(model_name, 0)
+                    row += f"{acc:>11.1f}%"
+                row += f" {q_metrics['majority_accuracy']:>9.1f}%"
+                print(row)
+        
+        # Coherence (condensed)
+        print("\n" + "-" * 70)
+        print(f"Coherence: {metrics['total_coherence']:.1f}% | "
+              f"Correct: {metrics['coherence_when_correct']:.1f}% | "
+              f"Wrong: {metrics['coherence_when_wrong']:.1f}%")
+    else:
+        print(f"Coherence: {metrics['total_coherence']:.1f}%")
+        print("(No ground truth - accuracy not calculated)")
+    
+    print("="*70 + "\n")
+
+def load_survey_questions_by_sector() -> Dict[str, Dict]:
+    """Load survey questions from JSON file organized by sector"""
+    if not os.path.exists('survey_question.json'):
+        print("Error: survey_question.json not found.")
+        return {}
+    
+    with open('survey_question.json', 'r', encoding='utf-8') as f:
+        survey_data = json.load(f)
+    
+    # Normalize sector names (handle case differences)
+    sector_mapping = {
+        'food': 'Food',
+        'housing': 'Housing',
+        'transport': 'Transport',
+        'energy': 'Energy'  # Legacy support, but main sectors are Food, Transport, Housing
+    }
+    
+    normalized_data = {}
+    for sector, questions in survey_data.items():
+        # Normalize to title case
+        normalized_sector = sector.capitalize()
+        # Ensure each question has the sector field set
+        for question_id, question_info in questions.items():
+            if 'sector' not in question_info:
+                question_info['sector'] = normalized_sector
+        normalized_data[normalized_sector] = questions
+    
+    return normalized_data
+
+def get_questions_for_sector(sector: str) -> Dict:
+    """
+    Get survey questions for a specific sector only (no cross-sector questions)
+    
+    Args:
+        sector: Sector name (Food, Transport, Housing, or lowercase variants)
+    
+    Returns:
+        Dictionary of questions for the specified sector only
+    """
+    survey_by_sector = load_survey_questions_by_sector()
+    
+    # Normalize sector name
+    sector_mapping = {
+        'food': 'Food',
+        'transport': 'Transport',
+        'housing': 'Housing',
+        'energy': 'Energy'  # Legacy support, but main sectors are Food, Transport, Housing
+    }
+    normalized_sector = sector_mapping.get(sector.lower(), sector.capitalize())
+    
+    if normalized_sector not in survey_by_sector:
+        print(f"Warning: Sector '{sector}' not found. Available sectors: {', '.join(survey_by_sector.keys())}")
+        return {}
+    
+    # Get questions for this sector and filter to ensure they all have the correct sector
+    sector_questions = survey_by_sector[normalized_sector].copy()
+    
+    # Double-check: filter out any questions that don't match the sector
+    filtered_questions = {}
+    for question_id, question_info in sector_questions.items():
+        # Ensure sector field matches
+        if question_info.get('sector', '').capitalize() == normalized_sector:
+            filtered_questions[question_id] = question_info
+        else:
+            print(f"Warning: Question {question_id} has sector '{question_info.get('sector')}' but expected '{normalized_sector}'. Skipping.")
+    
+    return filtered_questions
+
+def calculate_relevance_accuracy(all_relevance_results: Dict[str, Dict], statements: List[str], questions: Dict, 
+                                 has_ground_truth: bool = True, statement_to_original_index: Dict[int, int] = None) -> Dict:
+    """
+    Calculate accuracy of relevance detection (step 1), especially for irrelevant statements.
+    A statement is irrelevant if all questions have ground truth "no".
+    """
+    if not has_ground_truth:
+        return {}
+    
+    question_ids = list(questions.keys())
+    model_names = list(all_relevance_results.keys())
+    
+    # Identify irrelevant statements (all questions marked as "no" in ground truth)
+    irrelevant_statements = []
+    for stmt_idx in range(len(statements)):
+        original_idx = statement_to_original_index.get(stmt_idx, stmt_idx) if statement_to_original_index else stmt_idx
+        ground_truth_for_stmt = GROUND_TRUTH.get(original_idx, {})
+        # Check if all questions are "no" (irrelevant)
+        all_no = all(ground_truth_for_stmt.get(q_id, 'unknown') == 'no' for q_id in question_ids)
+        if all_no:
+            irrelevant_statements.append(stmt_idx)
+    
+    # Calculate accuracy for detecting irrelevant statements
+    irrelevant_detection = {model_name: {'correct': 0, 'total': len(irrelevant_statements)} 
+                           for model_name in model_names}
+    
+    for stmt_idx in irrelevant_statements:
+        for model_name in model_names:
+            # Check if model correctly identified as irrelevant (all "no")
+            relevance_results = all_relevance_results[model_name].get(stmt_idx, {})
+            all_detected_no = all(relevance_results.get(q_id) == 'no' for q_id in question_ids)
+            if all_detected_no:
+                irrelevant_detection[model_name]['correct'] += 1
+    
+    # Calculate overall relevance accuracy (per question)
+    question_relevance_accuracy = {q_id: {'total': 0, 'correct': {model_name: 0 for model_name in model_names}}
+                                   for q_id in question_ids}
+    
+    for stmt_idx in range(len(statements)):
+        original_idx = statement_to_original_index.get(stmt_idx, stmt_idx) if statement_to_original_index else stmt_idx
+        ground_truth_for_stmt = GROUND_TRUTH.get(original_idx, {})
+        
+        for question_id in question_ids:
+            gt = ground_truth_for_stmt.get(question_id, 'unknown')
+            if gt == 'unknown':
+                continue
+            
+            question_relevance_accuracy[question_id]['total'] += 1
+            
+            for model_name in model_names:
+                predicted = all_relevance_results[model_name].get(stmt_idx, {}).get(question_id)
+                if predicted == gt:
+                    question_relevance_accuracy[question_id]['correct'][model_name] += 1
+    
+    return {
+        'irrelevant_detection': irrelevant_detection,
+        'question_relevance_accuracy': question_relevance_accuracy,
+        'irrelevant_count': len(irrelevant_statements)
+    }
+
+def print_relevance_percentages(all_relevance_results: Dict[str, Dict], questions: Dict, statements: List[str] = None,
+                                has_ground_truth: bool = True, statement_to_original_index: Dict[int, int] = None):
+    """Print condensed relevance percentages and accuracy"""
+    if statements is None:
+        statements = SAMPLE_STATEMENTS
+    
+    question_ids = list(questions.keys())
+    model_names = list(all_relevance_results.keys())
+    
+    print("\n" + "="*70)
+    print("RELEVANCE CHECK (Step 1)")
+    print("="*70)
+    
+    # Print relevance percentages (condensed)
+    print(f"{'Question':<35} " + " ".join([f"{m.split('/')[-1][:12]:>12}" for m in model_names]))
+    print("-" * 70)
+    
+    for question_id in question_ids:
+        row = f"{question_id:<35} "
+        for model_name in model_names:
+            relevant_count = sum(1 for stmt_idx in all_relevance_results[model_name] 
+                               if all_relevance_results[model_name][stmt_idx].get(question_id) == 'yes')
+            percentage = (relevant_count / len(statements) * 100) if len(statements) > 0 else 0
+            row += f"{percentage:>11.1f}%"
+        print(row)
+    
+    # Print relevance accuracy if ground truth available
+    if has_ground_truth:
+        rel_accuracy = calculate_relevance_accuracy(all_relevance_results, statements, questions, 
+                                                    has_ground_truth, statement_to_original_index)
+        
+        if rel_accuracy and rel_accuracy.get('irrelevant_count', 0) > 0:
+            print("\n" + "-" * 70)
+            print("IRRELEVANT STATEMENT DETECTION ACCURACY")
+            print("-" * 70)
+            print(f"Irrelevant statements: {rel_accuracy['irrelevant_count']}")
+            for model_name in model_names:
+                stats = rel_accuracy['irrelevant_detection'][model_name]
+                acc = (stats['correct'] / stats['total'] * 100) if stats['total'] > 0 else 0
+                print(f"  {model_name.split('/')[-1][:30]:<30} {acc:>5.1f}% ({stats['correct']}/{stats['total']})")
+        
+        # Print overall relevance accuracy per question (condensed)
+        if rel_accuracy.get('question_relevance_accuracy'):
+            print("\n" + "-" * 70)
+            print("RELEVANCE ACCURACY BY QUESTION")
+            print("-" * 70)
+            print(f"{'Question':<35} " + " ".join([f"{m.split('/')[-1][:12]:>12}" for m in model_names]))
+            print("-" * 70)
+            for q_id in question_ids:
+                row = f"{q_id:<35} "
+                total = rel_accuracy['question_relevance_accuracy'][q_id]['total']
+                for model_name in model_names:
+                    correct = rel_accuracy['question_relevance_accuracy'][q_id]['correct'][model_name]
+                    acc = (correct / total * 100) if total > 0 else 0
+                    row += f"{acc:>11.1f}%"
+                print(row)
+    
+    print("="*70 + "\n")
+
+# ============================================================================
+# End of standalone code from sample_local_llm.py
+# ============================================================================
+
+# vLLM Server Configuration - Multiple Models Available
+# Load model configuration from JSON file
+with open('local_LLM_api_from_vLLM.json', 'r') as f:
+    vllm_config = json.load(f)
+    AVAILABLE_MODELS = vllm_config['available_models']
+    DEFAULT_MODEL_KEY = vllm_config.get('default_model_key', '1')
 VLLM_BASE_URL = AVAILABLE_MODELS[DEFAULT_MODEL_KEY]["base_url"]
 VLLM_MODEL_NAME = AVAILABLE_MODELS[DEFAULT_MODEL_KEY]["model_name"]
 
@@ -105,7 +1350,7 @@ MAX_CONCURRENT_REQUESTS = 450  # Optimized for 32GB GPU - can handle high concur
 REQUEST_TIMEOUT = 60  # Increased timeout for high concurrency scenarios
 
 # Load survey questions (default - will be reloaded in main if flag is set)
-SURVEY_QUESTIONS = load_survey_questions(use_real_data=False)
+SURVEY_QUESTIONS = load_survey_questions(use_real_survey_questions=False)
 
 def model_supports_system_messages(model_name: str) -> bool:
     """
@@ -534,26 +1779,7 @@ async def classify_statement_against_question_vllm_async(session: aiohttp.Client
         Tuple of (question_id, response, token_usage) where response is 'yes', 'no', or 'error'
     """
     prompt = create_classification_prompt(statement, question_info)
-    
-    # DEBUG: Print prompt and question for specific cases
-    debug_this = "takes up way too much farmland" in statement and ("Space_Too_Much" in question_id or "Space_Acceptable" in question_id)
-    if debug_this:
-        print(f"\n{'='*80}")
-        print(f"DEBUG - Question ID: {question_id}")
-        print(f"DEBUG - Question: {question_info['question']}")
-        print(f"DEBUG - Question Description: {question_info.get('description', 'N/A')}")
-        print(f"DEBUG - Statement: {statement}")
-        print(f"DEBUG - Prompt:\n{prompt}")
-        print(f"{'='*80}\n")
-    
-    # Get response and raw content for debugging
-    response, token_usage, raw_content = await call_vllm_api_async_with_debug(session, prompt, base_url, model_name, debug_this)
-    
-    # DEBUG: Print response for specific cases
-    if debug_this:
-        print(f"DEBUG - Raw API Response: {raw_content}")
-        print(f"DEBUG - Parsed Response: {response}")
-        print(f"{'='*80}\n")
+    response, token_usage = await call_vllm_api_async(session, prompt, base_url, model_name)
     
     # Normalize response to yes/no
     if 'yes' in response or response == 'y':
@@ -882,7 +2108,7 @@ async def classify_real_comments_vllm_async(comments_by_sector: Dict[str, List[s
     Args:
         comments_by_sector: Dictionary with sector as key and list of comment strings as values
                            e.g., {"Food": ["comment1", "comment2"], "Housing": ["comment3"]}
-        output_prefix: Prefix for output CSV files (default: "real_comments_vllm")
+        output_prefix: Prefix for output JSON files (default: "real_comments_vllm")
         base_url: Base URL for the vLLM API (default: VLLM_BASE_URL)
         model_name: Model name as served by vLLM (default: VLLM_MODEL_NAME)
         max_concurrent: Maximum concurrent requests (default: MAX_CONCURRENT_REQUESTS)
@@ -892,7 +2118,6 @@ async def classify_real_comments_vllm_async(comments_by_sector: Dict[str, List[s
     """
     print("="*80)
     print("CLASSIFYING REAL REDDIT COMMENTS BY SECTOR (vLLM)")
-    print("OPTIMIZED FOR CONTINUOUS BATCHING - MAXIMUM THROUGHPUT")
     print("="*80 + "\n")
     
     # Load survey questions organized by sector
@@ -909,13 +2134,8 @@ async def classify_real_comments_vllm_async(comments_by_sector: Dict[str, List[s
         'energy': 'Energy'  # Legacy support, but main sectors are Food, Transport, Housing
     }
     
-    print(f"Processing with vLLM model: {model_name}")
-    print(f"Server URL: {base_url}")
-    print(f"Max concurrent requests: {max_concurrent}")
-    print(f"Total comments by sector:")
-    for sector, comments in comments_by_sector.items():
-        print(f"  {sector}: {len(comments)} comments")
-    print()
+    print(f"Model: {model_name} | URL: {base_url} | Max concurrent: {max_concurrent}")
+    print(f"Comments by sector: {', '.join([f'{s}: {len(c)}' for s, c in comments_by_sector.items()])}\n")
     
     # Store all results by sector
     all_sector_results = {}
@@ -934,14 +2154,9 @@ async def classify_real_comments_vllm_async(comments_by_sector: Dict[str, List[s
             print(f"Available sectors: {', '.join(survey_by_sector.keys())}")
             continue
         
-        print("\n" + "="*80)
-        print(f"SECTOR: {normalized_sector}")
-        print(f"Comments: {len(comments)}")
-        print(f"Questions: {len(sector_questions)}")
-        print("="*80 + "\n")
+        print(f"\n[{normalized_sector}] {len(comments)} comments, {len(sector_questions)} questions")
         
         # ========== FIRST PASS: RELEVANCE CHECK ==========
-        print("FIRST PASS: RELEVANCE CHECK\n")
         
         start_time = time.time()
         relevance_results, first_pass_tokens = await first_pass_relevance_vllm_async(
@@ -951,24 +2166,12 @@ async def classify_real_comments_vllm_async(comments_by_sector: Dict[str, List[s
         )
         first_pass_time = time.time() - start_time
         
-        print(f"\nFirst pass completed in {first_pass_time:.2f} seconds")
-        print(f"Request throughput: {len(comments) * len(sector_questions) / first_pass_time:.2f} requests/second")
-        print(f"Token usage:")
-        print(f"  Prompt tokens: {first_pass_tokens['prompt_tokens']:,}")
-        print(f"  Completion tokens: {first_pass_tokens['completion_tokens']:,}")
-        print(f"  Total tokens: {first_pass_tokens['total_tokens']:,}")
-        print(f"Token throughput:")
-        print(f"  Output tokens: {first_pass_tokens['completion_tokens'] / first_pass_time:.2f} tokens/second")
-        print(f"  Total tokens: {first_pass_tokens['total_tokens'] / first_pass_time:.2f} tokens/second")
-        
         # Print relevance percentages
         all_relevance_results = {model_name: relevance_results}
-        print_relevance_percentages(all_relevance_results, sector_questions, comments)
+        print_relevance_percentages(all_relevance_results, sector_questions, comments,
+                                   has_ground_truth=False)
         
         # ========== SECOND PASS: DETAILED CLASSIFICATION ==========
-        print("="*80)
-        print("SECOND PASS: DETAILED CLASSIFICATION (Only Relevant Comments)")
-        print("="*80 + "\n")
         
         start_time = time.time()
         classification_results, second_pass_tokens = await second_pass_classification_vllm_async(
@@ -982,42 +2185,50 @@ async def classify_real_comments_vllm_async(comments_by_sector: Dict[str, List[s
         relevant_pairs = sum(1 for stmt_idx in relevance_results 
                            for q_id in relevance_results[stmt_idx] 
                            if relevance_results[stmt_idx][q_id] == 'yes')
-        if relevant_pairs > 0:
-            print(f"\nSecond pass completed in {second_pass_time:.2f} seconds")
-            print(f"Request throughput: {relevant_pairs / second_pass_time:.2f} requests/second")
-            print(f"Token usage:")
-            print(f"  Prompt tokens: {second_pass_tokens['prompt_tokens']:,}")
-            print(f"  Completion tokens: {second_pass_tokens['completion_tokens']:,}")
-            print(f"  Total tokens: {second_pass_tokens['total_tokens']:,}")
-            print(f"Token throughput:")
-            print(f"  Output tokens: {second_pass_tokens['completion_tokens'] / second_pass_time:.2f} tokens/second")
-            print(f"  Total tokens: {second_pass_tokens['total_tokens'] / second_pass_time:.2f} tokens/second")
         
         # Store final results (using same structure as sample_local_llm.py for compatibility)
         all_results = {model_name: classification_results}
         
-        # Save results to CSV (no ground truth for real comments)
-        output_filename = f"{output_prefix}_{normalized_sector.lower()}_results.csv"
-        save_results_csv(all_results, comments, sector_questions, filename=output_filename, has_ground_truth=False)
+        # Save results to JSON (comments as keys, all model labels grouped)
+        output_filename = f"{output_prefix}_{normalized_sector.lower()}_results.json"
+        save_results_json(all_results, comments, sector_questions, filename=output_filename)
+        
+        # Save relevant-only results JSON
+        relevant_only_filename = f"{output_prefix}_{normalized_sector.lower()}_results_relevant_only.json"
+        save_results_json_relevant_only(all_results, comments, sector_questions, relevance_results, 
+                                       filename=relevant_only_filename)
         
         # Calculate and print metrics (no ground truth)
         metrics = calculate_metrics(all_results, comments, sector_questions, has_ground_truth=False)
         print_metrics(metrics)
-        
-        # Save metrics to CSV
-        metrics_filename = f"{output_prefix}_{normalized_sector.lower()}_metrics.csv"
-        save_metrics_csv(metrics, filename=metrics_filename)
         
         # Store results for this sector
         all_sector_results[normalized_sector] = {
             'results': all_results,
             'metrics': metrics,
             'comments': comments,
-            'questions': sector_questions
+            'questions': sector_questions,
+            'first_pass_time': first_pass_time,
+            'second_pass_time': second_pass_time,
+            'first_pass_tokens': first_pass_tokens,
+            'second_pass_tokens': second_pass_tokens,
+            'relevant_pairs': relevant_pairs,
+            'total_tasks': len(comments) * len(sector_questions)
         }
     
+    # Print consolidated summary at the end
     print("\n" + "="*80)
     print("CLASSIFICATION COMPLETE FOR ALL SECTORS (vLLM)")
+    print("="*80)
+    total_time_all = sum(s['first_pass_time'] + s['second_pass_time'] for s in all_sector_results.values())
+    total_tokens_all = sum(s['first_pass_tokens']['total_tokens'] + s['second_pass_tokens']['total_tokens'] for s in all_sector_results.values())
+    total_output_tokens_all = sum(s['first_pass_tokens']['completion_tokens'] + s['second_pass_tokens']['completion_tokens'] for s in all_sector_results.values())
+    total_requests_all = sum(s['total_tasks'] + s['relevant_pairs'] for s in all_sector_results.values())
+    
+    if total_time_all > 0:
+        print(f"Summary: {total_requests_all} requests in {total_time_all:.1f}s | "
+              f"{total_requests_all/total_time_all:.1f} req/s | "
+              f"{total_tokens_all:,} tokens ({total_output_tokens_all/total_time_all:.0f} tok/s)")
     print("="*80 + "\n")
     
     return all_sector_results
@@ -1037,7 +2248,7 @@ def classify_real_comments_vllm(comments_by_sector: Dict[str, List[str]],
     Args:
         comments_by_sector: Dictionary with sector as key and list of comment strings as values
                            e.g., {"Food": ["comment1", "comment2"], "Housing": ["comment3"]}
-        output_prefix: Prefix for output CSV files (default: "real_comments_vllm")
+        output_prefix: Prefix for output JSON files (default: "real_comments_vllm")
         base_url: Base URL for the vLLM API (default: VLLM_BASE_URL)
         model_name: Model name as served by vLLM (default: VLLM_MODEL_NAME)
         max_concurrent: Maximum concurrent requests (default: MAX_CONCURRENT_REQUESTS)
@@ -1077,7 +2288,7 @@ def classify_real_comments_vllm(comments_by_sector: Dict[str, List[str]],
             comments_by_sector, output_prefix, base_url, model_name, max_concurrent
         ))
 
-async def main_async(model_config: Dict = None, use_real_data: bool = False):
+async def main_async(model_config: Dict = None, use_real_survey_questions: bool = False):
     """Async main function to run the two-pass classification with vLLM (optimized for continuous batching)"""
     global SURVEY_QUESTIONS
     
@@ -1089,14 +2300,14 @@ async def main_async(model_config: Dict = None, use_real_data: bool = False):
     model_name = model_config["model_name"]
     
     # Reload questions if needed
-    if use_real_data:
-        SURVEY_QUESTIONS = load_survey_questions(use_real_data=True)
+    if use_real_survey_questions:
+        SURVEY_QUESTIONS = load_survey_questions(use_real_survey_questions=True)
     
     print("="*80)
     print("vLLM SERVER SURVEY QUESTION CLASSIFIER (TWO-PASS APPROACH)")
     print("OPTIMIZED FOR CONTINUOUS BATCHING - MAXIMUM THROUGHPUT")
     print("="*80)
-    if use_real_data:
+    if use_real_survey_questions:
         print(f"Using real survey data from survey_question.json")
     else:
         print(f"Survey: Pew Research - Americans' views on local wind and solar power development")
@@ -1142,9 +2353,6 @@ async def main_async(model_config: Dict = None, use_real_data: bool = False):
     all_relevance_results = {}
     
     # ========== FIRST PASS: RELEVANCE CHECK ==========
-    print("="*80)
-    print("FIRST PASS: RELEVANCE CHECK")
-    print("="*80 + "\n")
     
     start_time = time.time()
     relevance_results, first_pass_tokens = await first_pass_relevance_vllm_async(
@@ -1156,23 +2364,13 @@ async def main_async(model_config: Dict = None, use_real_data: bool = False):
     all_relevance_results[model_name] = relevance_results
     
     total_first_pass_tasks = len(resampled_statements) * len(SURVEY_QUESTIONS)
-    print(f"\nFirst pass completed in {first_pass_time:.2f} seconds")
-    print(f"Request throughput: {total_first_pass_tasks / first_pass_time:.2f} requests/second")
-    print(f"Token usage:")
-    print(f"  Prompt tokens: {first_pass_tokens['prompt_tokens']:,}")
-    print(f"  Completion tokens: {first_pass_tokens['completion_tokens']:,}")
-    print(f"  Total tokens: {first_pass_tokens['total_tokens']:,}")
-    print(f"Token throughput:")
-    print(f"  Output tokens: {first_pass_tokens['completion_tokens'] / first_pass_time:.2f} tokens/second")
-    print(f"  Total tokens: {first_pass_tokens['total_tokens'] / first_pass_time:.2f} tokens/second")
     
     # Print relevance percentages
-    print_relevance_percentages(all_relevance_results, SURVEY_QUESTIONS, resampled_statements)
+    print_relevance_percentages(all_relevance_results, SURVEY_QUESTIONS, resampled_statements,
+                               has_ground_truth=not use_real_survey_questions, 
+                               statement_to_original_index=resampled_to_original if not use_real_survey_questions else None)
     
     # ========== SECOND PASS: DETAILED CLASSIFICATION ==========
-    print("="*80)
-    print("SECOND PASS: DETAILED CLASSIFICATION (Only Relevant Statements)")
-    print("="*80 + "\n")
     
     # Second pass: Detailed classification only for relevant statements
     start_time = time.time()
@@ -1187,16 +2385,6 @@ async def main_async(model_config: Dict = None, use_real_data: bool = False):
     relevant_pairs = sum(1 for stmt_idx in relevance_results 
                        for q_id in relevance_results[stmt_idx] 
                        if relevance_results[stmt_idx][q_id] == 'yes')
-    if relevant_pairs > 0:
-        print(f"\nSecond pass completed in {second_pass_time:.2f} seconds")
-        print(f"Request throughput: {relevant_pairs / second_pass_time:.2f} requests/second")
-        print(f"Token usage:")
-        print(f"  Prompt tokens: {second_pass_tokens['prompt_tokens']:,}")
-        print(f"  Completion tokens: {second_pass_tokens['completion_tokens']:,}")
-        print(f"  Total tokens: {second_pass_tokens['total_tokens']:,}")
-        print(f"Token throughput:")
-        print(f"  Output tokens: {second_pass_tokens['completion_tokens'] / second_pass_time:.2f} tokens/second")
-        print(f"  Total tokens: {second_pass_tokens['total_tokens'] / second_pass_time:.2f} tokens/second")
     
     # Store final results (using same structure as sample_local_llm.py for compatibility)
     all_results = {model_name: classification_results}
@@ -1204,13 +2392,19 @@ async def main_async(model_config: Dict = None, use_real_data: bool = False):
     # Save results to CSV (using resampled statements)
     # Pass mapping so ground truth can be looked up correctly for resampled statements
     save_results_csv(all_results, resampled_statements, SURVEY_QUESTIONS, 
-                    filename="vllm_test_results.csv", has_ground_truth=not use_real_data,
-                    statement_to_original_index=resampled_to_original if not use_real_data else None)
+                    filename="vllm_test_results.csv", has_ground_truth=not use_real_survey_questions,
+                    statement_to_original_index=resampled_to_original if not use_real_survey_questions else None)
+    
+    # Save relevant-only results CSV
+    save_results_csv_relevant_only(all_results, resampled_statements, SURVEY_QUESTIONS, relevance_results,
+                                  filename="vllm_test_results_relevant_only.csv", has_ground_truth=not use_real_survey_questions,
+                                  statement_to_original_index=resampled_to_original if not use_real_survey_questions else None)
     
     # Calculate and print metrics (using resampled statements)
-    # Note: Ground truth won't match perfectly due to resampling, but metrics still useful for throughput
+    # Pass mapping so ground truth can be looked up correctly for resampled statements
     metrics = calculate_metrics(all_results, resampled_statements, SURVEY_QUESTIONS, 
-                               has_ground_truth=False)  # Set to False since resampled statements won't match ground truth indices
+                               has_ground_truth=not use_real_survey_questions,
+                               statement_to_original_index=resampled_to_original if not use_real_survey_questions else None)
     print_metrics(metrics)
     
     # Save metrics to CSV
@@ -1219,21 +2413,11 @@ async def main_async(model_config: Dict = None, use_real_data: bool = False):
     total_time = first_pass_time + second_pass_time
     total_tokens = first_pass_tokens['total_tokens'] + second_pass_tokens['total_tokens']
     total_output_tokens = first_pass_tokens['completion_tokens'] + second_pass_tokens['completion_tokens']
+    total_requests = total_first_pass_tasks + relevant_pairs
     
-    print(f"\n{'='*80}")
-    print(f"TOTAL SUMMARY")
-    print(f"{'='*80}")
-    print(f"Total processing time: {total_time:.2f} seconds")
-    print(f"Total requests: {total_first_pass_tasks + relevant_pairs}")
-    print(f"Average request throughput: {(total_first_pass_tasks + relevant_pairs) / total_time:.2f} requests/second")
-    print(f"\nTotal token usage:")
-    print(f"  Prompt tokens: {first_pass_tokens['prompt_tokens'] + second_pass_tokens['prompt_tokens']:,}")
-    print(f"  Completion tokens: {total_output_tokens:,}")
-    print(f"  Total tokens: {total_tokens:,}")
-    print(f"\nAverage token throughput:")
-    print(f"  Output tokens: {total_output_tokens / total_time:.2f} tokens/second")
-    print(f"  Total tokens: {total_tokens / total_time:.2f} tokens/second")
-    print(f"{'='*80}\n")
+    print(f"\nSummary: {total_requests} requests in {total_time:.1f}s | "
+          f"{total_requests/total_time:.1f} req/s | "
+          f"{total_tokens:,} tokens ({total_output_tokens/total_time:.0f} tok/s)")
     
     print("Classification complete with vLLM (continuous batching optimized)!")
 
@@ -1272,6 +2456,60 @@ def process_reddit_data_and_classify(model_config: Dict = None):
     print("="*80)
     print("PROCESSING REDDIT DATA AND CLASSIFYING WITH vLLM")
     print("="*80 + "\n")
+    
+    # ========== CHECK CACHE FIRST ==========
+    cache_file = os.path.join('paper4data', 'sector_to_comments_cache.json')
+    comments_by_sector = {}
+    
+    if os.path.exists(cache_file):
+        print(f"Loading cached sector_to_comments from {cache_file}...")
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                comments_by_sector = json.load(f)
+            print(f"Loaded cached data:")
+            for sector, comments in comments_by_sector.items():
+                print(f"  {sector}: {len(comments)} comments")
+            # Skip to sampling step if cache loaded successfully
+            print("\nStep 5: Sampling comments per sector...")
+            sample_comments = {}
+            for sector, comments in comments_by_sector.items():
+                n_samples = min(100, len(comments))
+                sampled_comments = random.sample(comments, n_samples) if len(comments) > n_samples else comments
+                sample_comments[sector] = sampled_comments
+            
+            print(f"Sampled comments by sector:")
+            for sector, comments in sample_comments.items():
+                print(f"  {sector}: {len(comments)} comments")
+            
+            # Skip to classification step
+            print("\n" + "="*80)
+            print("STEP 6: CLASSIFYING WITH vLLM")
+            print("="*80)
+            print("This will:")
+            print("  - Food comments -> only Food survey questions")
+            print("  - Transport comments -> only Transport survey questions")
+            print("  - Housing comments -> only Housing survey questions")
+            print("  NO CROSS-SECTOR CLASSIFICATION")
+            print("  Uses vLLM server with continuous batching for maximum throughput")
+            print("="*80 + "\n")
+            
+            # Test connection first
+            if not test_vllm_connection(model_config["base_url"]):
+                print("Cannot proceed without vLLM server connection")
+                return None
+            
+            # Run classification
+            results = asyncio.run(classify_real_comments_vllm_async(
+                sample_comments,
+                base_url=model_config["base_url"],
+                model_name=model_config["model_name"]
+            ))
+            
+            return results
+        except Exception as e:
+            print(f"Error loading cache file: {e}")
+            print("Rebuilding from CSV files...")
+            comments_by_sector = {}
     
     # ========== STEP 1: Define sector keywords ==========
     print("Step 1: Defining sector keywords...")
@@ -1427,18 +2665,30 @@ def process_reddit_data_and_classify(model_config: Dict = None):
     
     # ========== STEP 4: Prepare comments by sector ==========
     print("\nStep 4: Preparing comments by sector...")
-    comments_by_sector = {}
     
-    for sector in df_all_filtered['sector'].dropna().unique():
-        sector_comments = df_all_filtered[df_all_filtered['sector'] == sector]['body'].dropna().tolist()
-        # Filter out empty strings
-        sector_comments = [c for c in sector_comments if c and str(c).strip()]
-        if sector_comments:
-            comments_by_sector[sector] = sector_comments
-    
-    print(f"Comments by sector:")
-    for sector, comments in comments_by_sector.items():
-        print(f"  {sector}: {len(comments)} comments")
+    # Build comments_by_sector from filtered data (cache check already done at start)
+    if not comments_by_sector:
+        print("Building sector_to_comments from filtered data...")
+        for sector in df_all_filtered['sector'].dropna().unique():
+            sector_comments = df_all_filtered[df_all_filtered['sector'] == sector]['body'].dropna().tolist()
+            # Filter out empty strings
+            sector_comments = [c for c in sector_comments if c and str(c).strip()]
+            if sector_comments:
+                comments_by_sector[sector] = sector_comments
+        
+        # Save to cache
+        print(f"Saving sector_to_comments to {cache_file}...")
+        os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+        try:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(comments_by_sector, f, ensure_ascii=False, indent=2)
+            print(f"Cache saved successfully")
+        except Exception as e:
+            print(f"Warning: Could not save cache file: {e}")
+        
+        print(f"Comments by sector:")
+        for sector, comments in comments_by_sector.items():
+            print(f"  {sector}: {len(comments)} comments")
     
     # ========== STEP 5: Sample comments per sector ==========
     print("\nStep 5: Sampling comments per sector...")
@@ -1483,7 +2733,7 @@ if __name__ == "__main__":
     args = sys.argv[1:]
     model_key = None
     process_reddit = False
-    use_real_data = False
+    use_real_survey_questions = False
     
     # Check for help
     if "--help" in args or "-h" in args:
@@ -1499,14 +2749,14 @@ if __name__ == "__main__":
         print("  [4] Mistral MiniStral 3 3B (port 8003)")
         print("\nOptions:")
         print("  --process-reddit    Process Reddit data from CSV files")
-        print("  --run-real-data     Use real survey questions from survey_question.json")
+        print("  --use-survey-questions  Use real survey questions from survey_question.json")
         print("  --model N           Select model by number (1-4)")
         print("  --help, -h          Show this help message")
         print("\nExamples:")
-        print("  python vllm_test.py                    # Interactive model selection")
-        print("  python vllm_test.py 1                  # Use model 1 (Qwen2.5-3B)")
-        print("  python vllm_test.py 2 --process-reddit  # Use model 2, process Reddit data")
-        print("  python vllm_test.py --model 3          # Use model 3 (Gemma 2)")
+        print("  python vllm_test.py                                    # Interactive model selection")
+        print("  python vllm_test.py 1                                  # Use model 1 (Qwen2.5-3B)")
+        print("  python vllm_test.py 1 --process-reddit --use-survey-questions  # Process Reddit data with real survey questions")
+        print("  python vllm_test.py --model 3                          # Use model 3 (Gemma 2)")
         print("="*80 + "\n")
         sys.exit(0)
     
@@ -1521,8 +2771,8 @@ if __name__ == "__main__":
     # Check for other flags
     if "--process-reddit" in args:
         process_reddit = True
-    if "--run-real-data" in args or "-run_real_data" in args:
-        use_real_data = True
+    if "--use-survey-questions" in args:
+        use_real_survey_questions = True
     
     # Select model (interactive if no key provided)
     model_config = select_model(model_key)
@@ -1534,7 +2784,7 @@ if __name__ == "__main__":
             print("\n" + "="*80)
             print("PROCESSING COMPLETE")
             print("="*80)
-            print("Results saved to CSV files with prefix 'real_comments_vllm_'")
+            print("Results saved to JSON files with prefix 'real_comments_vllm_'")
     else:
         # Default: run with sample statements
-        asyncio.run(main_async(model_config, use_real_data))
+        asyncio.run(main_async(model_config, use_real_survey_questions))

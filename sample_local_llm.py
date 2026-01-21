@@ -93,8 +93,9 @@ def load_survey_questions(use_real_data: bool = False) -> Dict:
 # Load survey questions (default - will be reloaded in main if flag is set)
 SURVEY_QUESTIONS = load_survey_questions(use_real_data=False)
 
-# Generate 10 sample statements about wind and solar power
+# Generate sample statements about wind and solar power (including vague and irrelevant ones)
 SAMPLE_STATEMENTS = [
+    # Clear, relevant statements
     "Installing a solar farm in our town would create hundreds of local jobs and boost our economy.",
     "Those wind turbines are an eyesore and completely ruin the beautiful countryside view.",
     "I'm not sure if a solar panel farm would really help or hurt our local economy - it's hard to say.",
@@ -104,7 +105,31 @@ SAMPLE_STATEMENTS = [
     "The new solar panels on the community center look great and don't detract from the area at all.",
     "A wind farm would bring in significant tax revenue for our county, helping fund schools and roads.",
     "I don't think a solar development would make any real difference to our local economy one way or another.",
-    "The space used for the solar farm is reasonable compared to the benefits we'll get from clean energy."
+    "The space used for the solar farm is reasonable compared to the benefits we'll get from clean energy.",
+    # More clear examples
+    "Solar panels on rooftops are becoming more common in our neighborhood.",
+    "Wind energy is clean and doesn't pollute the air like coal plants do.",
+    "The construction of the wind farm disrupted local wildlife habitats significantly.",
+    "Our electricity rates went down after the solar project started operating.",
+    "The solar installation created about 50 construction jobs for local workers.",
+    # Vague/ambiguous statements
+    "Renewable energy is interesting, I guess.",
+    "Some people like solar, others don't really care about it.",
+    "Energy projects can have various impacts on communities.",
+    "It depends on how you look at it, really.",
+    "There are pros and cons to everything.",
+    # Irrelevant statements (not about wind/solar development)
+    "I went to the grocery store yesterday and bought some apples.",
+    "The weather has been really nice this week.",
+    "My favorite TV show is on tonight.",
+    "Traffic was terrible on the highway this morning.",
+    "I'm thinking about renovating my kitchen next year.",
+    # Borderline relevant (tangentially related)
+    "Climate change is a serious issue that needs addressing.",
+    "Electric cars are becoming more popular these days.",
+    "I read an article about energy policy in the newspaper.",
+    "The government should invest more in infrastructure.",
+    "Technology is advancing rapidly in many fields."
 ]
 
 # Ground truth labels: {statement_index: {question_id: 'yes'/'no'}}
@@ -225,6 +250,246 @@ GROUND_TRUTH = {
         "Landscape_Not_Unattractive": "no",
         "Space_Too_Much": "no",
         "Space_Acceptable": "yes",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    10: {  # "Solar panels on rooftops are becoming more common in our neighborhood."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "yes",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "yes",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    11: {  # "Wind energy is clean and doesn't pollute the air like coal plants do."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    12: {  # "The construction of the wind farm disrupted local wildlife habitats significantly."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "yes",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "yes",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    13: {  # "Our electricity rates went down after the solar project started operating."
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "yes",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    14: {  # "The solar installation created about 50 construction jobs for local workers."
+        "Local_Economy_Help": "yes",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    15: {  # "Renewable energy is interesting, I guess." - Vague
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    16: {  # "Some people like solar, others don't really care about it." - Vague
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    17: {  # "Energy projects can have various impacts on communities." - Vague
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    18: {  # "It depends on how you look at it, really." - Vague
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    19: {  # "There are pros and cons to everything." - Vague
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    20: {  # "I went to the grocery store yesterday and bought some apples." - Irrelevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    21: {  # "The weather has been really nice this week." - Irrelevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    22: {  # "My favorite TV show is on tonight." - Irrelevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    23: {  # "Traffic was terrible on the highway this morning." - Irrelevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    24: {  # "I'm thinking about renovating my kitchen next year." - Irrelevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    25: {  # "Climate change is a serious issue that needs addressing." - Borderline relevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    26: {  # "Electric cars are becoming more popular these days." - Borderline relevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    27: {  # "I read an article about energy policy in the newspaper." - Borderline relevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    28: {  # "The government should invest more in infrastructure." - Borderline relevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
+        "Utility_Bill_Lower": "no",
+        "Utility_Bill_Higher": "no",
+        "Tax_Revenue_Help": "no"
+    },
+    29: {  # "Technology is advancing rapidly in many fields." - Borderline relevant
+        "Local_Economy_Help": "no",
+        "Local_Economy_Hurt": "no",
+        "Local_Economy_No_Difference": "no",
+        "Landscape_Unattractive": "no",
+        "Landscape_Not_Unattractive": "no",
+        "Space_Too_Much": "no",
+        "Space_Acceptable": "no",
         "Utility_Bill_Lower": "no",
         "Utility_Bill_Higher": "no",
         "Tax_Revenue_Help": "no"
@@ -505,15 +770,15 @@ Question Description: {question_info['description']}
 
 Statement to classify: "{statement}"
 
-This statement has been identified as relevant to the survey question above. Please confirm the classification.
+This statement has been identified as relevant to the survey question above. Now determine: Does this statement express support for, agreement with, or alignment with this survey question?
 
 Please respond with valid JSON in the following format:
 {{
   "relevant": "yes"  // or "no"
 }}
 
-- Please use "yes" if the statement is relevant to this survey question
-- Please use "no" if the statement is not relevant to this survey question
+- Please use "yes" if the statement supports, agrees with, or aligns with this survey question
+- Please use "no" if the statement does not support, contradicts, or is not aligned with this survey question
 
 Response (JSON only):"""
     return prompt
@@ -782,8 +1047,14 @@ def save_results_csv(all_results: Dict[str, Dict], statements: List[str], questi
     
     print(f"Results saved to {filename}")
 
-def calculate_metrics(all_results: Dict[str, Dict], statements: List[str], questions: Dict, has_ground_truth: bool = True) -> Dict:
-    """Calculate accuracy (if ground truth available) and coherence metrics"""
+def calculate_metrics(all_results: Dict[str, Dict], statements: List[str], questions: Dict, has_ground_truth: bool = True, statement_to_original_index: Dict[int, int] = None) -> Dict:
+    """
+    Calculate accuracy (if ground truth available) and coherence metrics
+    
+    Args:
+        statement_to_original_index: Optional mapping from resampled statement index to original index.
+                                    Used when statements have been resampled and ground truth indices need to be mapped.
+    """
     question_ids = list(questions.keys())
     model_names = list(all_results.keys())
     
@@ -795,6 +1066,10 @@ def calculate_metrics(all_results: Dict[str, Dict], statements: List[str], quest
     coherence_correct = []
     coherence_wrong = []
     coherence_all = []
+    
+    # Track accuracy by question type
+    question_stats = {q_id: {'total': 0, 'correct': {model_name: 0 for model_name in model_names}, 'majority_correct': 0} 
+                      for q_id in question_ids}
     
     # Process each statement-question pair
     for stmt_idx in range(len(statements)):
@@ -812,19 +1087,26 @@ def calculate_metrics(all_results: Dict[str, Dict], statements: List[str], quest
             
             # Accuracy calculations only if ground truth is available
             if has_ground_truth:
-                ground_truth = GROUND_TRUTH.get(stmt_idx, {}).get(question_id, 'unknown')
+                # Use mapping if provided (for resampled statements), otherwise use stmt_idx directly
+                original_idx = statement_to_original_index.get(stmt_idx, stmt_idx) if statement_to_original_index else stmt_idx
+                ground_truth = GROUND_TRUTH.get(original_idx, {}).get(question_id, 'unknown')
                 if ground_truth == 'unknown':
                     continue
+                
+                # Update question stats
+                question_stats[question_id]['total'] += 1
                 
                 # Check if each model is correct
                 for model_name, response in zip(model_names, responses):
                     if response == ground_truth:
                         model_correct[model_name] += 1
+                        question_stats[question_id]['correct'][model_name] += 1
                 
                 # Check majority vote
                 majority = get_majority_vote(responses)
                 if majority == ground_truth:
                     majority_correct += 1
+                    question_stats[question_id]['majority_correct'] += 1
                     coherence_correct.append(coherence)
                 else:
                     coherence_wrong.append(coherence)
@@ -843,6 +1125,17 @@ def calculate_metrics(all_results: Dict[str, Dict], statements: List[str], quest
         metrics['majority_accuracy'] = (majority_correct / total_pairs * 100) if total_pairs > 0 else 0
         metrics['coherence_when_correct'] = sum(coherence_correct) / len(coherence_correct) if coherence_correct else 0
         metrics['coherence_when_wrong'] = sum(coherence_wrong) / len(coherence_wrong) if coherence_wrong else 0
+        
+        # Calculate accuracy by question
+        metrics['accuracy_by_question'] = {}
+        for question_id, stats in question_stats.items():
+            if stats['total'] > 0:
+                metrics['accuracy_by_question'][question_id] = {
+                    'total': stats['total'],
+                    'model_accuracy': {model_name: (stats['correct'][model_name] / stats['total'] * 100) 
+                                       for model_name in model_names},
+                    'majority_accuracy': (stats['majority_correct'] / stats['total'] * 100) if stats['total'] > 0 else 0
+                }
     
     return metrics
 
@@ -868,25 +1161,49 @@ def save_metrics_csv(metrics: Dict, filename: str = "sample_local_llm_metrics.cs
     print(f"Metrics saved to {filename}")
 
 def print_metrics(metrics: Dict):
-    """Print metrics at the end"""
-    print("\n" + "="*80)
-    print("EVALUATION METRICS")
-    print("="*80)
-    print(f"\nTotal Statement-Question Pairs: {metrics['total_pairs']}")
-    print(f"\nTotal Coherence: {metrics['total_coherence']:.2f}%")
+    """Print condensed metrics"""
+    print("\n" + "="*70)
+    print("CLASSIFICATION METRICS (Step 2)")
+    print("="*70)
     
-    # Only print accuracy metrics if ground truth is available
     if metrics.get('has_ground_truth', True):
-        print(f"\nModel Accuracy:")
-        for model_name, accuracy in metrics['model_accuracy'].items():
-            print(f"  {model_name}: {accuracy:.2f}%")
-        print(f"\nMajority Vote Accuracy: {metrics['majority_accuracy']:.2f}%")
-        print(f"\nCoherence When Correct: {metrics['coherence_when_correct']:.2f}%")
-        print(f"Coherence When Wrong: {metrics['coherence_when_wrong']:.2f}%")
+        model_names = list(metrics['model_accuracy'].keys())
+        
+        # Overall accuracy (condensed)
+        print(f"{'Overall Accuracy':<35} " + " ".join([f"{m.split('/')[-1][:12]:>12}" for m in model_names]) + f" {'Majority':>10}")
+        print("-" * 70)
+        row = f"{'':<35} "
+        for model_name in model_names:
+            row += f"{metrics['model_accuracy'][model_name]:>11.1f}%"
+        row += f" {metrics['majority_accuracy']:>9.1f}%"
+        print(row)
+        
+        # Accuracy by question (condensed table)
+        if 'accuracy_by_question' in metrics and metrics['accuracy_by_question']:
+            print("\n" + "-" * 70)
+            print("ACCURACY BY QUESTION")
+            print("-" * 70)
+            print(f"{'Question':<35} " + " ".join([f"{m.split('/')[-1][:12]:>12}" for m in model_names]) + f" {'Majority':>10}")
+            print("-" * 70)
+            
+            for question_id, q_metrics in sorted(metrics['accuracy_by_question'].items()):
+                row = f"{question_id:<35} "
+                for model_name in model_names:
+                    acc = q_metrics['model_accuracy'].get(model_name, 0)
+                    row += f"{acc:>11.1f}%"
+                row += f" {q_metrics['majority_accuracy']:>9.1f}%"
+                print(row)
+        
+        # Coherence (condensed)
+        print("\n" + "-" * 70)
+        print(f"Coherence: {metrics['total_coherence']:.1f}% | "
+              f"Correct: {metrics['coherence_when_correct']:.1f}% | "
+              f"Wrong: {metrics['coherence_when_wrong']:.1f}%")
     else:
-        print("\n(No ground truth available - accuracy metrics not calculated)")
+        print(f"Coherence: {metrics['total_coherence']:.1f}%")
+        print("(No ground truth - accuracy not calculated)")
     
-    print("="*80 + "\n")
+    print("="*70 + "\n")
 
 
 def load_survey_questions_by_sector() -> Dict[str, Dict]:
@@ -957,38 +1274,124 @@ def get_questions_for_sector(sector: str) -> Dict:
     
     return filtered_questions
 
-def print_relevance_percentages(all_relevance_results: Dict[str, Dict], questions: Dict, statements: List[str] = None):
-    """Print relevance percentages for each question (by question ID only)"""
+def calculate_relevance_accuracy(all_relevance_results: Dict[str, Dict], statements: List[str], questions: Dict, 
+                                 has_ground_truth: bool = True, statement_to_original_index: Dict[int, int] = None) -> Dict:
+    """
+    Calculate accuracy of relevance detection (step 1), especially for irrelevant statements.
+    A statement is irrelevant if all questions have ground truth "no".
+    """
+    if not has_ground_truth:
+        return {}
+    
+    question_ids = list(questions.keys())
+    model_names = list(all_relevance_results.keys())
+    
+    # Identify irrelevant statements (all questions marked as "no" in ground truth)
+    irrelevant_statements = []
+    for stmt_idx in range(len(statements)):
+        original_idx = statement_to_original_index.get(stmt_idx, stmt_idx) if statement_to_original_index else stmt_idx
+        ground_truth_for_stmt = GROUND_TRUTH.get(original_idx, {})
+        # Check if all questions are "no" (irrelevant)
+        all_no = all(ground_truth_for_stmt.get(q_id, 'unknown') == 'no' for q_id in question_ids)
+        if all_no:
+            irrelevant_statements.append(stmt_idx)
+    
+    # Calculate accuracy for detecting irrelevant statements
+    irrelevant_detection = {model_name: {'correct': 0, 'total': len(irrelevant_statements)} 
+                           for model_name in model_names}
+    
+    for stmt_idx in irrelevant_statements:
+        for model_name in model_names:
+            # Check if model correctly identified as irrelevant (all "no")
+            relevance_results = all_relevance_results[model_name].get(stmt_idx, {})
+            all_detected_no = all(relevance_results.get(q_id) == 'no' for q_id in question_ids)
+            if all_detected_no:
+                irrelevant_detection[model_name]['correct'] += 1
+    
+    # Calculate overall relevance accuracy (per question)
+    question_relevance_accuracy = {q_id: {'total': 0, 'correct': {model_name: 0 for model_name in model_names}}
+                                   for q_id in question_ids}
+    
+    for stmt_idx in range(len(statements)):
+        original_idx = statement_to_original_index.get(stmt_idx, stmt_idx) if statement_to_original_index else stmt_idx
+        ground_truth_for_stmt = GROUND_TRUTH.get(original_idx, {})
+        
+        for question_id in question_ids:
+            gt = ground_truth_for_stmt.get(question_id, 'unknown')
+            if gt == 'unknown':
+                continue
+            
+            question_relevance_accuracy[question_id]['total'] += 1
+            
+            for model_name in model_names:
+                predicted = all_relevance_results[model_name].get(stmt_idx, {}).get(question_id)
+                if predicted == gt:
+                    question_relevance_accuracy[question_id]['correct'][model_name] += 1
+    
+    return {
+        'irrelevant_detection': irrelevant_detection,
+        'question_relevance_accuracy': question_relevance_accuracy,
+        'irrelevant_count': len(irrelevant_statements)
+    }
+
+def print_relevance_percentages(all_relevance_results: Dict[str, Dict], questions: Dict, statements: List[str] = None,
+                                has_ground_truth: bool = True, statement_to_original_index: Dict[int, int] = None):
+    """Print condensed relevance percentages and accuracy"""
     if statements is None:
         statements = SAMPLE_STATEMENTS
     
     question_ids = list(questions.keys())
     model_names = list(all_relevance_results.keys())
     
-    print("\n" + "="*80)
-    print("RELEVANCE PERCENTAGES BY QUESTION (First Pass)")
-    print("="*80)
-    print(f"{'Question ID':<40} " + " ".join([f"{m.split('/')[-1][:15]:<15}" for m in model_names]) + " Average")
-    print("-" * 80)
+    print("\n" + "="*70)
+    print("RELEVANCE CHECK (Step 1)")
+    print("="*70)
+    
+    # Print relevance percentages (condensed)
+    print(f"{'Question':<35} " + " ".join([f"{m.split('/')[-1][:12]:>12}" for m in model_names]))
+    print("-" * 70)
     
     for question_id in question_ids:
-        row = f"{question_id:<40} "
-        percentages = []
-        
+        row = f"{question_id:<35} "
         for model_name in model_names:
-            # Count relevant (yes) for this question across all statements
             relevant_count = sum(1 for stmt_idx in all_relevance_results[model_name] 
                                if all_relevance_results[model_name][stmt_idx].get(question_id) == 'yes')
-            total_statements = len(statements)
-            percentage = (relevant_count / total_statements * 100) if total_statements > 0 else 0
-            percentages.append(percentage)
-            row += f"{percentage:>6.1f}%        "
-        
-        avg_percentage = sum(percentages) / len(percentages) if percentages else 0
-        row += f"{avg_percentage:>6.1f}%"
+            percentage = (relevant_count / len(statements) * 100) if len(statements) > 0 else 0
+            row += f"{percentage:>11.1f}%"
         print(row)
     
-    print("="*80 + "\n")
+    # Print relevance accuracy if ground truth available
+    if has_ground_truth:
+        rel_accuracy = calculate_relevance_accuracy(all_relevance_results, statements, questions, 
+                                                    has_ground_truth, statement_to_original_index)
+        
+        if rel_accuracy and rel_accuracy.get('irrelevant_count', 0) > 0:
+            print("\n" + "-" * 70)
+            print("IRRELEVANT STATEMENT DETECTION ACCURACY")
+            print("-" * 70)
+            print(f"Irrelevant statements: {rel_accuracy['irrelevant_count']}")
+            for model_name in model_names:
+                stats = rel_accuracy['irrelevant_detection'][model_name]
+                acc = (stats['correct'] / stats['total'] * 100) if stats['total'] > 0 else 0
+                print(f"  {model_name.split('/')[-1][:30]:<30} {acc:>5.1f}% ({stats['correct']}/{stats['total']})")
+        
+        # Print overall relevance accuracy per question (condensed)
+        if rel_accuracy.get('question_relevance_accuracy'):
+            print("\n" + "-" * 70)
+            print("RELEVANCE ACCURACY BY QUESTION")
+            print("-" * 70)
+            print(f"{'Question':<35} " + " ".join([f"{m.split('/')[-1][:12]:>12}" for m in model_names]))
+            print("-" * 70)
+            for q_id in question_ids:
+                row = f"{q_id:<35} "
+                total = rel_accuracy['question_relevance_accuracy'][q_id]['total']
+                for model_name in model_names:
+                    correct = rel_accuracy['question_relevance_accuracy'][q_id]['correct'][model_name]
+                    acc = (correct / total * 100) if total > 0 else 0
+                    row += f"{acc:>11.1f}%"
+                print(row)
+    
+    print("="*70 + "\n")
 
 def main():
     """Main function to run the two-pass classification for all models"""
@@ -1040,7 +1443,8 @@ def main():
         all_relevance_results[model_config['name']] = relevance_results
     
     # Print relevance percentages
-    print_relevance_percentages(all_relevance_results, SURVEY_QUESTIONS, SAMPLE_STATEMENTS)
+    print_relevance_percentages(all_relevance_results, SURVEY_QUESTIONS, SAMPLE_STATEMENTS, 
+                               has_ground_truth=not use_real_data)
     
     # ========== SECOND PASS: DETAILED CLASSIFICATION ==========
     print("="*80)
@@ -1366,7 +1770,8 @@ def classify_real_comments(comments_by_sector: Dict[str, List[str]], output_pref
             all_relevance_results[model_config['name']] = relevance_results
         
         # Print relevance percentages
-        print_relevance_percentages(all_relevance_results, sector_questions, comments)
+        print_relevance_percentages(all_relevance_results, sector_questions, comments, 
+                                   has_ground_truth=False)
         
         # ========== SECOND PASS: DETAILED CLASSIFICATION ==========
         print("="*80)

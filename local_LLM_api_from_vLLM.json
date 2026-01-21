@@ -1,0 +1,29 @@
+{
+  "available_models": {
+    "1": {
+      "name": "qwen2.5-3b",
+      "base_url": "http://127.0.0.1:8000",
+      "model_name": "qwen25_3b",
+      "description": "Qwen2.5-3B-Instruct (port 8000)"
+    },
+    "2": {
+      "name": "qwen3-1p7b",
+      "base_url": "http://127.0.0.1:8001",
+      "model_name": "qwen3-1p7b",
+      "description": "Qwen3 1.7B (port 8001)"
+    },
+    "3": {
+      "name": "gemma2-2b",
+      "base_url": "http://127.0.0.1:8002",
+      "model_name": "gemma-2-2b-it",
+      "description": "Gemma 2 2B Instruct (port 8002)"
+    },
+    "4": {
+      "name": "mistral3-3b",
+      "base_url": "http://127.0.0.1:8003",
+      "model_name": "ministral-3-3b",
+      "description": "Mistral MiniStral 3 3B (port 8003)"
+    }
+  },
+  "default_model_key": "1"
+}
