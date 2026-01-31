@@ -655,21 +655,17 @@ def run_label_cache(
 
     cache = load_cache(cache_path)
     all_results: Dict[str, List[Dict[str, Any]]] = {}
-    total_labelled = 0
+    # limit_total = per-sector cap (500 means 500 of each sector)
+    per_sector_cap = limit_total
 
     for sector, items in tqdm(cache.items(), desc="Sectors", unit="sector", dynamic_ncols=True):
-        if limit_total is not None and total_labelled >= limit_total:
-            all_results[sector] = []
-            continue
         if limit_per_sector is not None:
             items = items[: limit_per_sector]
-        if limit_total is not None:
-            remaining = limit_total - total_labelled
-            items = items[: remaining]
+        if per_sector_cap is not None:
+            items = items[: per_sector_cap]
         if not items:
             all_results[sector] = []
             continue
-        total_labelled += len(items)
         results = asyncio.run(
             label_sector_items(items, base_url, model_name, max_concurrent=max_concurrent)
         )
@@ -708,21 +704,17 @@ def run_norms_label_cache(
 
     cache = load_cache(cache_path)
     all_results: Dict[str, List[Dict[str, Any]]] = {}
-    total_labelled = 0
+    # limit_total = per-sector cap (500 means 500 of each sector)
+    per_sector_cap = limit_total
 
     for sector, items in tqdm(cache.items(), desc="Sectors", unit="sector", dynamic_ncols=True):
-        if limit_total is not None and total_labelled >= limit_total:
-            all_results[sector] = []
-            continue
         if limit_per_sector is not None:
             items = items[: limit_per_sector]
-        if limit_total is not None:
-            remaining = limit_total - total_labelled
-            items = items[: remaining]
+        if per_sector_cap is not None:
+            items = items[: per_sector_cap]
         if not items:
             all_results[sector] = []
             continue
-        total_labelled += len(items)
         results = asyncio.run(
             label_sector_items_norms(items, sector, base_url, model_name, max_concurrent=max_concurrent)
         )
@@ -754,7 +746,7 @@ if __name__ == "__main__":
     p.add_argument("--7b", "--7B", dest="use_7b", action="store_true", help="Use Mistral 7B (CLASSIFICATIONS #7B, port 8001); default remains current model")
     p.add_argument("--out", default=None, help="Output JSON path for labels (default: paper4data/disagreement_labels.json)")
     p.add_argument("--limit", type=int, default=None, help="Max items per sector to label (for testing)")
-    p.add_argument("--limit-total", type=int, default=None, help="Max total items to label across all sectors (e.g. 100 for quick API test)")
+    p.add_argument("--limit-total", type=int, default=None, help="Max items per sector (500 = 500 of each sector, 1500 total)")
     p.add_argument("--max-concurrent", type=int, default=MAX_CONCURRENT, help="Max concurrent vLLM requests")
     p.add_argument("--norms", action="store_true", help="Run norms labelling (8 IPCC social-driver questions per comment); output for 00_vLLM_visualize.py")
     p.add_argument("--out-norms", default=None, help="Output JSON for norms labels (default: paper4data/norms_labels.json)")
