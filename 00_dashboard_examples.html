@@ -18,12 +18,30 @@ h1 { text-align: center; color: #e6edf3; }
 .sector-column { display: flex; flex-direction: column; }
 .sector-header { font-weight: 600; font-size: 12px; color: #8b949e; margin-bottom: 8px; text-transform: uppercase; }
 .example-comment { padding: 14px; border-radius: 8px; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; border-left: 4px solid #58a6ff; background: #0d1117; color: #e6edf3; }
+.prompt-dropdown { margin-bottom: 20px; }
+.prompt-dropdown summary { cursor: pointer; color: #58a6ff; font-size: 14px; user-select: none; }
+.prompt-dropdown summary:hover { text-decoration: underline; }
+.prompt-box { margin-top: 12px; padding: 14px; border-radius: 8px; background: #0d1117; border: 1px solid #30363d; font-size: 13px; }
+.prompt-box .prompt-text { color: #e6edf3; line-height: 1.6; margin-bottom: 12px; }
+.prompt-box .choices-label { color: #8b949e; font-weight: 600; margin-bottom: 6px; }
+.prompt-box .choices-list { color: #c9d1d9; list-style: none; padding-left: 0; }
+.prompt-box .choices-list li { margin: 4px 0; }
 </style>
 </head>
 <body>
 <h1>Example Comments by Category</h1>
 <div class="back-link"><a href="00_dashboardv2.html">&lt;- Back to Dashboard</a></div>
 <div class="question-section"><div class="question-title">Norm signal present</div>
+<details class="prompt-dropdown"><summary>Read exact prompt &amp; choices sent to the LLM</summary>
+<div class="prompt-box">
+<div class="prompt-text">Does this comment or post reference what others do or approve, or any social norm (descriptive or injunctive)? Answer with exactly one word: yes or no.</div>
+<div class="choices-label">Valid choices:</div>
+<ul class="choices-list">
+<li>yes</li>
+<li>no</li>
+</ul>
+</div>
+</details>
 <div class="category-group"><div class="category-title">No</div><div class="sectors-row">
 <div class="sector-column"><div class="sector-header">FOOD</div><div class="example-comment">This is a debate I've been having internally, and with a close friend who's vegan for environmental reasons for quite a while too. I should really do some good reading on the topic</div></div>
 <div class="sector-column"><div class="sector-header">TRANSPORT</div><div class="example-comment">I mostly don't see how it applies.  For most people, their commutes take the EV away from the their home during the solar production hours.  The EV doesn't really add any value in this case.  EVs may be the cheapest way to buy a battery, but they don't always benefit a solar system.</div></div>
@@ -52,6 +70,23 @@ When measuring an installer on price per watt for a &quot;cheaper price&quot; un
 </div></div>
 </div>
 <div class="question-section"><div class="question-title">Author stance</div>
+<details class="prompt-dropdown"><summary>Read exact prompt &amp; choices sent to the LLM</summary>
+<div class="prompt-box">
+<div class="choices-label">Prompt uses only the comment's sector topic (not all three):</div>
+<div class="prompt-text"><strong>transport:</strong> EVs</div>
+<div class="prompt-text"><strong>food:</strong> veganism or vegetarianism / diet</div>
+<div class="prompt-text"><strong>housing:</strong> solar</div>
+<div class="choices-label">Prompt template:</div>
+<div class="prompt-text">What is the author's stance toward {sector_topic}? Answer with exactly one of: against, against particular but pro, neither/mixed, pushing for.</div>
+<div class="choices-label">Valid choices:</div>
+<ul class="choices-list">
+<li>against</li>
+<li>against particular but pro</li>
+<li>neither/mixed</li>
+<li>pushing for</li>
+</ul>
+</div>
+</details>
 <div class="category-group"><div class="category-title">against</div><div class="sectors-row">
 <div class="sector-column"><div class="sector-header">FOOD</div><div class="example-comment">You’re trying to argue that one way is better than any other ways. Your argument isn’t new or original. The pick me vegans have been crying about angry vegans and coddling carnists all along. I said it takes all types. All forms of activism reach a certain type of person. I’m not interested in debating a vegan about this. The end.</div></div>
 <div class="sector-column"><div class="sector-header">TRANSPORT</div><div class="example-comment">I mostly don't see how it applies.  For most people, their commutes take the EV away from the their home during the solar production hours.  The EV doesn't really add any value in this case.  EVs may be the cheapest way to buy a battery, but they don't always benefit a solar system.</div></div>
@@ -99,6 +134,25 @@ Problem: The roof needs a replacement in the next year or two with $1500 worth o
 </div></div>
 </div>
 <div class="question-section"><div class="question-title">Reference group</div>
+<details class="prompt-dropdown"><summary>Read exact prompt &amp; choices sent to the LLM</summary>
+<div class="prompt-box">
+<div class="prompt-text">Who is the reference group (who the author refers to as doing or approving something)? Answer with exactly one of: coworkers, family, friends, local community, neighbors, online community, other, other reddit user, partner/spouse, people like me, political tribe.</div>
+<div class="choices-label">Valid choices:</div>
+<ul class="choices-list">
+<li>coworkers</li>
+<li>family</li>
+<li>friends</li>
+<li>local community</li>
+<li>neighbors</li>
+<li>online community</li>
+<li>other</li>
+<li>other reddit user</li>
+<li>partner/spouse</li>
+<li>people like me</li>
+<li>political tribe</li>
+</ul>
+</div>
+</details>
 <div class="category-group"><div class="category-title">coworkers</div><div class="sectors-row">
 <div class="sector-column"><div class="sector-header">FOOD</div><div class="example-comment">I know I'm late to this but I just have one simple piece of advice: 
 Just talk. 
@@ -254,6 +308,17 @@ That said, I don't oppose this move, because political reality is often that if 
 </div></div>
 </div>
 <div class="question-section"><div class="question-title">Perceived reference stance</div>
+<details class="prompt-dropdown"><summary>Read exact prompt &amp; choices sent to the LLM</summary>
+<div class="prompt-box">
+<div class="prompt-text">What stance does the author attribute to that reference group? Answer with exactly one of: against, neither/mixed, pushing for.</div>
+<div class="choices-label">Valid choices:</div>
+<ul class="choices-list">
+<li>against</li>
+<li>neither/mixed</li>
+<li>pushing for</li>
+</ul>
+</div>
+</details>
 <div class="category-group"><div class="category-title">against</div><div class="sectors-row">
 <div class="sector-column"><div class="sector-header">FOOD</div><div class="example-comment">You’re trying to argue that one way is better than any other ways. Your argument isn’t new or original. The pick me vegans have been crying about angry vegans and coddling carnists all along. I said it takes all types. All forms of activism reach a certain type of person. I’m not interested in debating a vegan about this. The end.</div></div>
 <div class="sector-column"><div class="sector-header">TRANSPORT</div><div class="example-comment">What I don't understand is yes people have different ideas and will have discussions or even arguments but OP purposefully attacks Tesla and skews information. 
@@ -295,6 +360,17 @@ When measuring an installer on price per watt for a &quot;cheaper price&quot; un
 </div></div>
 </div>
 <div class="question-section"><div class="question-title">Descriptive norm</div>
+<details class="prompt-dropdown"><summary>Read exact prompt &amp; choices sent to the LLM</summary>
+<div class="prompt-box">
+<div class="prompt-text">Does the text express a descriptive norm (what people do / how common something is)? Answer with exactly one of: none, implied, explicit.</div>
+<div class="choices-label">Valid choices:</div>
+<ul class="choices-list">
+<li>none</li>
+<li>implied</li>
+<li>explicit</li>
+</ul>
+</div>
+</details>
 <div class="category-group"><div class="category-title">explicit</div><div class="sectors-row">
 <div class="sector-column"><div class="sector-header">FOOD</div><div class="example-comment">You're in the UK right? Most bread here is vegan. Hovis and Kingsmill actually label &quot;suitable for vegans&quot;.</div></div>
 <div class="sector-column"><div class="sector-header">TRANSPORT</div><div class="example-comment">With $15k to $25k EVs, in 15 years very very few people will be fueling their cars with gasoline or diesel.  And road transportation makes up about 65% of oil use.  EV sales are at 16% of total vehicle sales.  And EV sales are increasing at 40% per year.  In just four years EVs will outsell ICE vehicles.</div></div>
@@ -332,6 +408,19 @@ Problem: The roof needs a replacement in the next year or two with $1500 worth o
 </div></div>
 </div>
 <div class="question-section"><div class="question-title">Injunctive norm</div>
+<details class="prompt-dropdown"><summary>Read exact prompt &amp; choices sent to the LLM</summary>
+<div class="prompt-box">
+<div class="prompt-text">Does the text express an injunctive norm (what people should do / approval or disapproval)? Answer with exactly one of: none, implied approval, implied disapproval, explicit approval, explicit disapproval.</div>
+<div class="choices-label">Valid choices:</div>
+<ul class="choices-list">
+<li>none</li>
+<li>implied approval</li>
+<li>implied disapproval</li>
+<li>explicit approval</li>
+<li>explicit disapproval</li>
+</ul>
+</div>
+</details>
 <div class="category-group"><div class="category-title">explicit approval</div><div class="sectors-row">
 <div class="sector-column"><div class="sector-header">FOOD</div><div class="example-comment">I would never stop being vegan of course 😊 i will never ever support the  slaughter and exploitation of animals. I will never ever eat dairy eggs or meat again, i dont see any reason to plus i feel so much better on a vegan diet and its a lot healthier, being vegan is a lot better for the environment. Veganism is the way to go, the point of my post is that the world will always be full of evil and yes a vegan world will be far better theres no comparison, but it wont be perfect and we will still...</div></div>
 <div class="sector-column"><div class="sector-header">TRANSPORT</div><div class="example-comment">Every now and then someone mentions it in r/trains when it comes up.
@@ -395,6 +484,21 @@ Problem: The roof needs a replacement in the next year or two with $1500 worth o
 </div></div>
 </div>
 <div class="question-section"><div class="question-title">Mechanism</div>
+<details class="prompt-dropdown"><summary>Read exact prompt &amp; choices sent to the LLM</summary>
+<div class="prompt-box">
+<div class="prompt-text">What mechanism is used to convey the norm or social pressure? Answer with exactly one of: blame/shame, community standard, identity/status signaling, other, praise, rule/virtue language, social comparison.</div>
+<div class="choices-label">Valid choices:</div>
+<ul class="choices-list">
+<li>blame/shame</li>
+<li>community standard</li>
+<li>identity/status signaling</li>
+<li>other</li>
+<li>praise</li>
+<li>rule/virtue language</li>
+<li>social comparison</li>
+</ul>
+</div>
+</details>
 <div class="category-group"><div class="category-title">blame/shame</div><div class="sectors-row">
 <div class="sector-column"><div class="sector-header">FOOD</div><div class="example-comment">But perhaps the perceived rigor of being vegan will dissuade a relative from becoming a vegan themself. It’s not clear cut. Maybe I’m wrong. But nobody should confidently say I’m wrong.</div></div>
 <div class="sector-column"><div class="sector-header">TRANSPORT</div><div class="example-comment">What I don't understand is yes people have different ideas and will have discussions or even arguments but OP purposefully attacks Tesla and skews information. 

@@ -286,7 +286,14 @@ NORMS_SYSTEM = (
     "Answer with exactly one of the allowed options; no explanation."
 )
 
-# question_id, user_prompt template (use {text}), options list, optional map from LLM answer -> stored value
+# Topic wording per sector so the LLM sees only the relevant sector (not all three)
+SECTOR_TOPIC = {
+    "transport": "EVs",
+    "food": "veganism or vegetarianism / diet",
+    "housing": "solar",
+}
+
+# question_id, user_prompt (or prompt_template with {sector_topic} for sector-specific questions), options, map_to
 NORMS_QUESTIONS: List[Dict[str, Any]] = [
     {
         "id": "1.1_gate",
@@ -297,6 +304,7 @@ NORMS_QUESTIONS: List[Dict[str, Any]] = [
     {
         "id": "1.1.1_stance",
         "prompt": "What is the author's stance toward the topic (EVs / solar / veganism or diet)? Answer with exactly one of: against, against particular but pro, neither/mixed, pushing for.",
+        "prompt_template": "What is the author's stance toward {sector_topic}? Answer with exactly one of: against, against particular but pro, neither/mixed, pushing for.",
         "options": ["against", "against particular but pro", "neither/mixed", "pushing for"],
         "map_to": None,
     },
@@ -352,16 +360,27 @@ def _parse_single_choice(content: str, options: List[str], map_to: Optional[Dict
     return options[0] if options else ""
 
 
+def _get_prompt_for_question(question: Dict[str, Any], sector: Optional[str] = None) -> str:
+    """Use prompt_template + sector_topic when sector is set and template exists; else use prompt."""
+    template = question.get("prompt_template")
+    if sector is not None and template:
+        sector_topic = SECTOR_TOPIC.get(sector, sector)
+        return template.format(sector_topic=sector_topic)
+    return question.get("prompt", "")
+
+
 async def call_vllm_single_choice(
     session: aiohttp.ClientSession,
     text: str,
     question: Dict[str, Any],
     base_url: str,
     model_name: str,
+    sector: Optional[str] = None,
 ) -> Tuple[str, str]:
-    """Call vLLM for one norms question; return (parsed_answer, raw_content)."""
+    """Call vLLM for one norms question; return (parsed_answer, raw_content). sector used for sector-specific prompts."""
     url = base_url.rstrip("/") + CHAT_ENDPOINT
-    user_content = question["prompt"] + "\n\n---\n\nComment/post:\n\n" + (text[:4000] if text else "")
+    prompt = _get_prompt_for_question(question, sector)
+    user_content = prompt + "\n\n---\n\nComment/post:\n\n" + (text[:4000] if text else "")
     payload = {
         "model": model_name,
         "messages": [
@@ -426,12 +445,13 @@ async def label_one_item_norms(
     base_url: str,
     model_name: str,
     sem: asyncio.Semaphore,
+    sector: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Run all NORMS_QUESTIONS for one comment; return { comment_index, comment, answers } (dashboard format)."""
+    """Run all NORMS_QUESTIONS for one comment; return { comment_index, comment, answers } (dashboard format). sector used for sector-specific prompts (e.g. stance toward EVs vs solar vs diet)."""
     async with sem:
         answers: Dict[str, str] = {}
         for q in NORMS_QUESTIONS:
-            ans, _ = await call_vllm_single_choice(session, item["body"], q, base_url, model_name)
+            ans, _ = await call_vllm_single_choice(session, item["body"], q, base_url, model_name, sector=sector)
             answers[q["id"]] = ans
         return {
             "comment_index": comment_index,
@@ -442,16 +462,17 @@ async def label_one_item_norms(
 
 async def label_sector_items_norms(
     items: List[Dict[str, str]],
+    sector: str,
     base_url: str,
     model_name: str,
     max_concurrent: int = MAX_CONCURRENT,
 ) -> List[Dict[str, Any]]:
-    """Label each item with all norms questions; return list of { comment_index, comment, answers }."""
+    """Label each item with all norms questions; return list of { comment_index, comment, answers }. sector used so prompts mention only that sector (e.g. EVs, solar, or veganism/diet)."""
     sem = asyncio.Semaphore(max_concurrent)
 
     async with aiohttp.ClientSession() as session:
         tasks = [
-            asyncio.create_task(label_one_item_norms(session, it, i, base_url, model_name, sem))
+            asyncio.create_task(label_one_item_norms(session, it, i, base_url, model_name, sem, sector=sector))
             for i, it in enumerate(items)
         ]
         results = []
@@ -597,7 +618,7 @@ def run_norms_label_cache(
             continue
         total_labelled += len(items)
         results = asyncio.run(
-            label_sector_items_norms(items, base_url, model_name, max_concurrent=max_concurrent)
+            label_sector_items_norms(items, sector, base_url, model_name, max_concurrent=max_concurrent)
         )
         all_results[sector] = results
 
