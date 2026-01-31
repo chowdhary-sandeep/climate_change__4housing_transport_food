@@ -751,6 +751,7 @@ if __name__ == "__main__":
     p.add_argument("--label-only", action="store_true", help="Only load cache and label; skip building.")
     p.add_argument("--cache", default=CACHE_PATH, help="Path to cache JSON (default: full cache; use sector_to_comments_cache_10k_sample.json for fast API test).")
     p.add_argument("--model-key", default=VLLM_MODEL_KEY, help="Key in local_LLM_api_from_vLLM.json (e.g. 5 for Qwen3-VL-4B)")
+    p.add_argument("--7b", "--7B", dest="use_7b", action="store_true", help="Use Mistral 7B (CLASSIFICATIONS #7B, port 8001); default remains current model")
     p.add_argument("--out", default=None, help="Output JSON path for labels (default: paper4data/disagreement_labels.json)")
     p.add_argument("--limit", type=int, default=None, help="Max items per sector to label (for testing)")
     p.add_argument("--limit-total", type=int, default=None, help="Max total items to label across all sectors (e.g. 100 for quick API test)")
@@ -759,6 +760,8 @@ if __name__ == "__main__":
     p.add_argument("--out-norms", default=None, help="Output JSON for norms labels (default: paper4data/norms_labels.json)")
     p.add_argument("--incomplete", action="store_true", help="Shortcut: label-only, norms, 10k sample cache (equiv. to --label-only --norms --cache paper4data/sector_to_comments_cache_10k_sample.json); use with e.g. --limit 500")
     args = p.parse_args()
+    if getattr(args, "use_7b", False):
+        args.model_key = "6"
 
     if args.incomplete:
         args.label_only = True
@@ -775,10 +778,9 @@ if __name__ == "__main__":
     out_path = args.out or os.path.join("paper4data", "disagreement_labels.json")
     out_norms_path = args.out_norms or os.path.join("paper4data", "norms_labels.json")
 
-    if not args.label_only:
+    if args.build_only:
         print("Building cache from CSVs...")
         build_cache_from_csvs(csv_dir=CSV_DIR, cache_path=args.cache)
-    if args.build_only:
         print("Done (build-only).")
         exit(0)
 

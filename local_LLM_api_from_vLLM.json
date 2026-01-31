@@ -29,6 +29,12 @@
       "base_url": "http://127.0.0.1:8006",
       "model_name": "qwen3_4b",
       "description": "Qwen3-VL-4B-Instruct (port 8006, Docker)"
+    },
+    "6": {
+      "name": "mistral7b",
+      "base_url": "http://127.0.0.1:8001",
+      "model_name": "mistral7b",
+      "description": "CLASSIFICATIONS #7B: Mistral-7B-Instruct-v0.2 (port 8001, Docker vllm-mistral7b)"
     }
   },
   "default_model_key": "1"
