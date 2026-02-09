@@ -3,6 +3,14 @@
 
 Shared utilities for vLLM labeling and verification scripts.
 Provides common functionality for API calls, prompt building, and schema loading.
+
+CONFIDENCE SCORES / LOG PROBABILITIES:
+- vLLM/OpenAI-compatible APIs support logprobs for confidence estimation
+- Set logprobs=True in API payload to get token-level log probabilities
+- top_logprobs parameter controls how many alternative tokens to return per position
+- Log probability closer to 0 (e.g., -0.1) = high confidence
+- Log probability more negative (e.g., -2.0) = low confidence
+- Can be converted to probability: prob = exp(logprob)
 """
 
 import json
@@ -163,9 +171,10 @@ async def call_llm_single_choice(
     system_prompt: Optional[str] = None,
     temperature: float = 0.1,
     max_tokens: int = 64,
-) -> Tuple[str, str]:
+    return_logprobs: bool = False,
+) -> Tuple[str, str, Optional[float]]:
     """
-    Call LLM API for one question; return (parsed_answer, raw_content).
+    Call LLM API for one question; return (parsed_answer, raw_content, avg_logprob).
 
     Args:
         session: aiohttp session
@@ -177,9 +186,11 @@ async def call_llm_single_choice(
         system_prompt: Optional system prompt (defaults to NORMS_SYSTEM)
         temperature: Sampling temperature
         max_tokens: Maximum response tokens
+        return_logprobs: If True, request and return log probabilities for confidence estimation
 
     Returns:
-        (parsed_answer, raw_content): Tuple of parsed answer and raw LLM response
+        (parsed_answer, raw_content, avg_logprob): Tuple of parsed answer, raw response, and average log probability
+        avg_logprob is None if return_logprobs=False or if logprobs unavailable
     """
     url = base_url.rstrip("/") + CHAT_ENDPOINT
     prompt = _get_prompt_for_question(question, sector)
@@ -196,20 +207,37 @@ async def call_llm_single_choice(
         "max_tokens": max_tokens,
     }
 
+    # Add logprobs if requested
+    if return_logprobs:
+        payload["logprobs"] = True
+        payload["top_logprobs"] = 5  # Return top 5 alternative tokens per position
+
     timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
     try:
         async with session.post(url, json=payload, timeout=timeout) as resp:
             resp.raise_for_status()
             data = await resp.json()
-            content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+            choice = (data.get("choices") or [{}])[0]
+            content = choice.get("message", {}).get("content", "").strip()
             parsed = _parse_single_choice(content, question["options"], question.get("map_to"))
-            return parsed, content
+
+            # Extract average logprob if available
+            avg_logprob = None
+            if return_logprobs and "logprobs" in choice:
+                logprobs_data = choice["logprobs"]
+                if "content" in logprobs_data and logprobs_data["content"]:
+                    # Average the logprobs across all tokens
+                    token_logprobs = [token.get("logprob", 0) for token in logprobs_data["content"] if token.get("logprob") is not None]
+                    if token_logprobs:
+                        avg_logprob = sum(token_logprobs) / len(token_logprobs)
+
+            return parsed, content, avg_logprob
     except Exception as e:
         qid = question.get("id", "?")
         default = question["options"][0] if question.get("options") else ""
         if question.get("map_to"):
             default = question["map_to"].get(default, default)
-        return default, str(e)
+        return default, str(e), None
 
 
 async def call_llm_simple(

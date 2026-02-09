@@ -9,7 +9,7 @@
    - Deduplicate by body per sector (keep first occurrence).
 
 2. Load cache and label each item with vLLM via hierarchical norms questions (IPCC social drivers):
-   - Multiple questions per comment: norm signal present (1.1_gate), author stance (1.1.1_stance), 
+   - Multiple questions per comment: norm signal present (1.1_gate), author stance (1.1.1_stance),
      descriptive/injunctive norms (1.2.1, 1.2.2), reference group (1.3.1), perceived reference stance (1.3.1b),
      second-order normative beliefs (1.3.3).
    - Sector-specific prompts (EVs vs solar vs veganism/diet).
@@ -18,8 +18,19 @@
    - When limit_total is set, sample equally across years (2010+) for temporal analysis.
    - Preserve year in output for temporal visualization.
    - API config from local_LLM_api_from_vLLM.json (default model key 6 = Mistral-7B on port 8001; use --qwen for Qwen3-VL-4B on port 8006).
-   - Output: sector -> list of { comment_index, comment, year?, answers: { "1.1_gate": "1", "1.1.1_stance": "pro", ... } }.
+   - Output: sector -> list of { comment_index, comment, year?, answers: { "1.1_gate": "1", ... }, logprobs: { "1.1_gate": -0.5, ... } }.
    - Use with 00_vLLM_visualize.py to build norms_hierarchical_dashboard.html and examples.
+
+CONFIDENCE SCORES / LOG PROBABILITIES:
+- PURPOSE: Measure if low labeler confidence predicts mismatch with verifier (reasoning model).
+- vLLM/OpenAI-compatible APIs support logprobs for confidence estimation.
+- Set logprobs=True in API payload to get token-level log probabilities.
+- top_logprobs parameter controls how many alternative tokens to return per position.
+- Log probability closer to 0 (e.g., -0.1) = high confidence.
+- Log probability more negative (e.g., -2.0) = low confidence.
+- Can be converted to probability: prob = exp(logprob).
+- All API call functions (call_vllm_single_choice, call_vllm_disagreement, etc.) return avg_logprob
+  alongside parsed answer to enable downstream analysis of confidence vs verification accuracy.
 """
 
 import json
@@ -482,8 +493,9 @@ async def call_vllm_single_choice(
     model_name: str,
     sector: Optional[str] = None,
     system_prompt: Optional[str] = None,
-) -> Tuple[str, str]:
-    """Call vLLM for one question; return (parsed_answer, raw_content). sector used for sector-specific prompts. system_prompt defaults to NORMS_SYSTEM if not provided."""
+    return_logprobs: bool = True,
+) -> Tuple[str, str, Optional[float]]:
+    """Call vLLM for one question; return (parsed_answer, raw_content, avg_logprob). sector used for sector-specific prompts. system_prompt defaults to NORMS_SYSTEM if not provided. return_logprobs=True by default to collect confidence scores."""
     url = base_url.rstrip("/") + CHAT_ENDPOINT
     prompt = _get_prompt_for_question(question, sector)
     user_content = prompt + "\n\n---\n\nComment/post:\n\n" + (text[:4000] if text else "")
@@ -497,20 +509,37 @@ async def call_vllm_single_choice(
         "temperature": 0.1,
         "max_tokens": 64,
     }
+    # Add logprobs for confidence estimation
+    if return_logprobs:
+        payload["logprobs"] = True
+        payload["top_logprobs"] = 5  # Return top 5 alternative tokens per position
+
     timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
     try:
         async with session.post(url, json=payload, timeout=timeout) as resp:
             resp.raise_for_status()
             data = await resp.json()
-            content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+            choice = (data.get("choices") or [{}])[0]
+            content = choice.get("message", {}).get("content", "").strip()
             parsed = _parse_single_choice(content, question["options"], question.get("map_to"))
-            return parsed, content
+
+            # Extract average logprob if available
+            avg_logprob = None
+            if return_logprobs and "logprobs" in choice:
+                logprobs_data = choice["logprobs"]
+                if "content" in logprobs_data and logprobs_data["content"]:
+                    # Average the logprobs across all tokens
+                    token_logprobs = [token.get("logprob", 0) for token in logprobs_data["content"] if token.get("logprob") is not None]
+                    if token_logprobs:
+                        avg_logprob = sum(token_logprobs) / len(token_logprobs)
+
+            return parsed, content, avg_logprob
     except Exception as e:
         qid = question.get("id", "?")
         default = question["options"][0] if question.get("options") else ""
         if question.get("map_to"):
             default = question["map_to"].get(default, default)
-        return default, str(e)
+        return default, str(e), None
 
 
 async def call_vllm_disagreement(
@@ -518,8 +547,9 @@ async def call_vllm_disagreement(
     text: str,
     base_url: str,
     model_name: str,
-) -> Tuple[str, str]:
-    """Call vLLM /v1/chat/completions; return (normalized_label, raw_content)."""
+    return_logprobs: bool = True,
+) -> Tuple[str, str, Optional[float]]:
+    """Call vLLM /v1/chat/completions; return (normalized_label, raw_content, avg_logprob)."""
     url = base_url.rstrip("/") + CHAT_ENDPOINT
     payload = {
         "model": model_name,
@@ -530,19 +560,35 @@ async def call_vllm_disagreement(
         "temperature": 0.1,
         "max_tokens": 16,
     }
+    # Add logprobs for confidence estimation
+    if return_logprobs:
+        payload["logprobs"] = True
+        payload["top_logprobs"] = 5
+
     timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
     try:
         async with session.post(url, json=payload, timeout=timeout) as resp:
             resp.raise_for_status()
             data = await resp.json()
-            content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip().lower()
+            choice = (data.get("choices") or [{}])[0]
+            content = choice.get("message", {}).get("content", "").strip().lower()
+
+            # Extract average logprob if available
+            avg_logprob = None
+            if return_logprobs and "logprobs" in choice:
+                logprobs_data = choice["logprobs"]
+                if "content" in logprobs_data and logprobs_data["content"]:
+                    token_logprobs = [token.get("logprob", 0) for token in logprobs_data["content"] if token.get("logprob") is not None]
+                    if token_logprobs:
+                        avg_logprob = sum(token_logprobs) / len(token_logprobs)
+
             if "yes" in content and "no" not in content[: content.find("yes")]:
-                return "yes", content
+                return "yes", content, avg_logprob
             if "no" in content:
-                return "no", content
-            return "unknown", content
+                return "no", content, avg_logprob
+            return "unknown", content, avg_logprob
     except Exception as e:
-        return "error", str(e)
+        return "error", str(e), None
 
 
 async def _recheck_against_is_lack_of_options(
@@ -551,8 +597,9 @@ async def _recheck_against_is_lack_of_options(
     sector: str,
     base_url: str,
     model_name: str,
-) -> bool:
-    """If stance was 'against', ask whether text asks for more options or complains options are insufficient. Returns True if yes (override to pro but lack of options)."""
+    return_logprobs: bool = True,
+) -> Tuple[bool, Optional[float]]:
+    """If stance was 'against', ask whether text asks for more options or complains options are insufficient. Returns (True, logprob) if yes (override to pro but lack of options)."""
     url = base_url.rstrip("/") + CHAT_ENDPOINT
     sector_topic = SECTOR_TOPIC.get(sector, sector)
     prompt = STANCE_AGAINST_RECHECK_TEMPLATE.format(sector_topic=sector_topic)
@@ -566,15 +613,32 @@ async def _recheck_against_is_lack_of_options(
         "temperature": 0.1,
         "max_tokens": 16,
     }
+    # Add logprobs for confidence estimation
+    if return_logprobs:
+        payload["logprobs"] = True
+        payload["top_logprobs"] = 5
+
     timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
     try:
         async with session.post(url, json=payload, timeout=timeout) as resp:
             resp.raise_for_status()
             data = await resp.json()
-            content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip().lower()
-            return "yes" in content and "no" not in content[: content.find("yes")]
+            choice = (data.get("choices") or [{}])[0]
+            content = choice.get("message", {}).get("content", "").strip().lower()
+
+            # Extract average logprob if available
+            avg_logprob = None
+            if return_logprobs and "logprobs" in choice:
+                logprobs_data = choice["logprobs"]
+                if "content" in logprobs_data and logprobs_data["content"]:
+                    token_logprobs = [token.get("logprob", 0) for token in logprobs_data["content"] if token.get("logprob") is not None]
+                    if token_logprobs:
+                        avg_logprob = sum(token_logprobs) / len(token_logprobs)
+
+            result = "yes" in content and "no" not in content[: content.find("yes")]
+            return result, avg_logprob
     except Exception:
-        return False
+        return False, None
 
 
 async def _recheck_against_strict(
@@ -583,8 +647,9 @@ async def _recheck_against_strict(
     sector: str,
     base_url: str,
     model_name: str,
-) -> str:
-    """Second pass for comments still labelled 'against': stringent question. Returns one of: against, frustrated but still pro, unclear stance."""
+    return_logprobs: bool = True,
+) -> Tuple[str, Optional[float]]:
+    """Second pass for comments still labelled 'against': stringent question. Returns (stance, logprob) where stance is one of: against, frustrated but still pro, unclear stance."""
     url = base_url.rstrip("/") + CHAT_ENDPOINT
     sector_topic = SECTOR_TOPIC.get(sector, sector)
     prompt = STANCE_AGAINST_STRICT_RECHECK_TEMPLATE.format(sector_topic=sector_topic)
@@ -598,17 +663,34 @@ async def _recheck_against_strict(
         "temperature": 0.1,
         "max_tokens": 64,
     }
+    # Add logprobs for confidence estimation
+    if return_logprobs:
+        payload["logprobs"] = True
+        payload["top_logprobs"] = 5
+
     timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
     options = STANCE_AGAINST_STRICT_RECHECK_OPTIONS
     try:
         async with session.post(url, json=payload, timeout=timeout) as resp:
             resp.raise_for_status()
             data = await resp.json()
-            content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
+            choice = (data.get("choices") or [{}])[0]
+            content = choice.get("message", {}).get("content", "").strip()
+
+            # Extract average logprob if available
+            avg_logprob = None
+            if return_logprobs and "logprobs" in choice:
+                logprobs_data = choice["logprobs"]
+                if "content" in logprobs_data and logprobs_data["content"]:
+                    token_logprobs = [token.get("logprob", 0) for token in logprobs_data["content"] if token.get("logprob") is not None]
+                    if token_logprobs:
+                        avg_logprob = sum(token_logprobs) / len(token_logprobs)
+
             parsed = _parse_single_choice(content, options, map_to=None)
-            return parsed if parsed in options else options[0]
+            result = parsed if parsed in options else options[0]
+            return result, avg_logprob
     except Exception:
-        return options[0]
+        return options[0], None
 
 
 async def label_one_item_norms(
@@ -620,30 +702,42 @@ async def label_one_item_norms(
     sem: asyncio.Semaphore,
     sector: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Run all NORMS_QUESTIONS and SURVEY_QUESTIONS for one comment; return { comment_index, comment, answers } (dashboard format). sector used for sector-specific prompts (e.g. stance toward EVs vs solar vs diet). Safety net: if stance is 'against', recheck for 'pro but lack of options'."""
+    """Run all NORMS_QUESTIONS and SURVEY_QUESTIONS for one comment; return { comment_index, comment, answers, logprobs } (dashboard format). sector used for sector-specific prompts (e.g. stance toward EVs vs solar vs diet). Safety net: if stance is 'against', recheck for 'pro but lack of options'. Collects log probabilities for all questions to measure labeler confidence."""
     async with sem:
         answers: Dict[str, str] = {}
+        logprobs: Dict[str, Optional[float]] = {}
+
         # Run norms questions
         for q in NORMS_QUESTIONS:
-            ans, _ = await call_vllm_single_choice(session, item["body"], q, base_url, model_name, sector=sector)
+            ans, _, logprob = await call_vllm_single_choice(session, item["body"], q, base_url, model_name, sector=sector)
             answers[q["id"]] = ans
+            logprobs[q["id"]] = logprob
+
         # Run survey questions for this sector (if any)
         if sector and sector in SURVEY_QUESTIONS_BY_SECTOR:
             for q in SURVEY_QUESTIONS_BY_SECTOR[sector]:
-                ans, _ = await call_vllm_single_choice(session, item["body"], q, base_url, model_name, sector=sector, system_prompt=SURVEY_SYSTEM)
+                ans, _, logprob = await call_vllm_single_choice(session, item["body"], q, base_url, model_name, sector=sector, system_prompt=SURVEY_SYSTEM)
                 answers[q["id"]] = ans
+                logprobs[q["id"]] = logprob
+
         # Safety net: if model said "against", recheck whether text asks for more options or complains options insufficient
         if sector and answers.get("1.1.1_stance") == "against":
-            if await _recheck_against_is_lack_of_options(session, item["body"], sector, base_url, model_name):
+            is_lack_of_options, lack_logprob = await _recheck_against_is_lack_of_options(session, item["body"], sector, base_url, model_name)
+            if is_lack_of_options:
                 answers["1.1.1_stance"] = "pro but lack of options"
+                # Store logprob for the recheck decision
+                logprobs["1.1.1_stance_lack_recheck"] = lack_logprob
             else:
                 # Second pass (stringent): still "against" — recheck with strict question; store result for dashboard
-                recheck = await _recheck_against_strict(session, item["body"], sector, base_url, model_name)
+                recheck, recheck_logprob = await _recheck_against_strict(session, item["body"], sector, base_url, model_name)
                 answers["1.1.1_stance_recheck"] = recheck
+                logprobs["1.1.1_stance_recheck"] = recheck_logprob
+
         result = {
             "comment_index": comment_index,
             "comment": item["body"],
             "answers": answers,
+            "logprobs": logprobs,
         }
         # Preserve year if present (for temporal analysis)
         if "year" in item:
@@ -681,15 +775,15 @@ async def label_sector_items(
     model_name: str,
     max_concurrent: int = MAX_CONCURRENT,
 ) -> List[Dict[str, Any]]:
-    """Label each item (id, body) with disagreement yes/no via concurrent vLLM calls."""
+    """Label each item (id, body) with disagreement yes/no via concurrent vLLM calls. Includes logprobs for confidence estimation."""
     sem = asyncio.Semaphore(max_concurrent)
 
     async def one(session: aiohttp.ClientSession, item: Dict[str, str]) -> Dict[str, Any]:
         async with sem:
-            label, raw = await call_vllm_disagreement(
+            label, raw, logprob = await call_vllm_disagreement(
                 session, item["body"], base_url, model_name
             )
-        return {"id": item["id"], "body": item["body"], "disagreement": label, "raw": raw}
+        return {"id": item["id"], "body": item["body"], "disagreement": label, "raw": raw, "logprob": logprob}
 
     async with aiohttp.ClientSession() as session:
         tasks = [asyncio.create_task(one(session, it)) for it in items]

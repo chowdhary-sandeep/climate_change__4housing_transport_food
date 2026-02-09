@@ -41,7 +41,8 @@ from shared_utilities import (
 API_CONFIG_PATH = "local_LLM_api_from_vLLM.json"
 NORMS_LABELS_PATH = "paper4data/norms_labels.json"
 OUTPUT_PATH = "paper4data/00_verification_results.json"
-SAMPLES_PER_QUESTION = 10  # Number of comments to verify per question (or max available)
+SAMPLES_OUTPUT_PATH = "paper4data/00_verification_samples.json"  # Full sample-level results
+SAMPLES_PER_QUESTION = 25  # Number of comments to verify per question (or max available)
 MAX_CONCURRENT = 12  # Concurrent requests (matching LM Studio configuration)
 RANDOM_SEED = 42
 
@@ -155,7 +156,7 @@ async def relabel_with_reasoning_model(
             vllm_label = comment.get("answers", {}).get(qid, "")
 
             # Get reasoning model label using shared utility
-            reasoning_label, raw_content = await call_llm_single_choice(
+            reasoning_label, raw_content, _ = await call_llm_single_choice(
                 session=session,
                 text=text,
                 question=question,
@@ -297,12 +298,24 @@ def calculate_metrics_for_question(
     y_true = [normalize_label(c["reasoning_label"]) for c in comments]
     y_pred = [normalize_label(c["vllm_label"]) for c in comments]
 
-    # Filter out any empty labels (reasoning model didn't respond)
-    valid_pairs = [(t, p) for t, p in zip(y_true, y_pred) if t and p]
-    n_empty = total_samples - len(valid_pairs)
+    # Filter out any empty labels (reasoning model didn't respond) and collect examples
+    valid_comments = []
+    for c in comments:
+        t = normalize_label(c["reasoning_label"])
+        p = normalize_label(c["vllm_label"])
+        if t and p:
+            valid_comments.append({
+                "comment": c.get("comment", "")[:300],  # Truncate long comments
+                "sector": c.get("sector", ""),
+                "vllm_label": p,
+                "reasoning_label": t,
+                "match": t == p
+            })
+
+    n_empty = total_samples - len(valid_comments)
     empty_pct = (n_empty / total_samples * 100) if total_samples > 0 else 0
 
-    if not valid_pairs:
+    if not valid_comments:
         return {
             "question_id": question_id,
             "question_short_form": question_short_form or question_id,
@@ -311,10 +324,12 @@ def calculate_metrics_for_question(
             "n_empty_responses": n_empty,
             "empty_response_pct": round(empty_pct, 1),
             "accuracy": 0.0,
-            "error": "No valid label pairs"
+            "error": "No valid label pairs",
+            "examples": {"correct": [], "incorrect": []}
         }
 
-    y_true, y_pred = zip(*valid_pairs)
+    y_true = [c["reasoning_label"] for c in valid_comments]
+    y_pred = [c["vllm_label"] for c in valid_comments]
 
     # Get unique labels
     labels = sorted(set(y_true) | set(y_pred))
@@ -366,7 +381,7 @@ def calculate_metrics_for_question(
         "question_id": question_id,
         "question_short_form": question_short_form or question_id,
         "n_samples_total": total_samples,
-        "n_samples_valid": len(valid_pairs),
+        "n_samples_valid": len(valid_comments),
         "n_empty_responses": n_empty,
         "empty_response_pct": round(empty_pct, 1),
         "accuracy": round(accuracy, 3),
@@ -484,10 +499,18 @@ async def main():
     print(f"  Mean Cohen's kappa: {results['summary']['mean_kappa']:.3f}")
 
     # 5. Save results
-    print(f"\n[5/5] Saving results to {OUTPUT_PATH}...")
+    print(f"\n[5/5] Saving results...")
     os.makedirs(os.path.dirname(OUTPUT_PATH) or ".", exist_ok=True)
+
+    # Save aggregated metrics
+    print(f"  - Aggregated metrics: {OUTPUT_PATH}")
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
+
+    # Save full sample-level data for later analysis and example extraction
+    print(f"  - Full sample data: {SAMPLES_OUTPUT_PATH}")
+    with open(SAMPLES_OUTPUT_PATH, "w", encoding="utf-8") as f:
+        json.dump(relabeled, f, indent=2, ensure_ascii=False)
 
     print("\n" + "="*80)
     print("Verification complete!")
