@@ -539,7 +539,7 @@ a { color: #58a6ff; font-size: 0.9em; }
                     )
             html_parts.append("</div>\n")
 
-    # Survey questions section (at bottom)
+    # Survey questions section (at bottom) - radial bar charts, one per sector
     survey_metadata = survey_metadata or {}
     survey_qids = [qid for qid in counts.keys() if qid.startswith(("diet_", "ev_", "solar_"))]
     if survey_qids:
@@ -557,15 +557,16 @@ a { color: #58a6ff; font-size: 0.9em; }
             sector_title = SECTOR_DISPLAY.get(sector, sector.upper())
             html_parts.append(f'<h3 style="margin-top: 20px; color: #c9d1d9;">{sector_title}</h3>\n')
             
+            # Collect YES percentages for all questions in this sector
+            question_labels = []
+            yes_percentages = []
+            question_ids = []
+            
             for qid in survey_by_sector[sector]:
                 if qid not in counts:
                     continue
                 
-                short_form = survey_metadata.get(qid, {}).get("short_form", qid)
-                html_parts.append(f'<h4 style="margin-top: 12px; margin-bottom: 4px; color: #b1bac4; font-size: 1.0em;">{short_form}</h4>\n')
-                
                 c = counts[qid]
-                # Create horizontal bar chart: YES vs NO for this question's sector only
                 if sector not in c:
                     continue
                 
@@ -577,52 +578,82 @@ a { color: #58a6ff; font-size: 0.9em; }
                     continue
                 
                 yes_pct = (yes_count / total) * 100
-                no_pct = (no_count / total) * 100
+                short_form = survey_metadata.get(qid, {}).get("short_form", qid)
                 
-                traces = [
-                    {
-                        "x": [yes_pct],
-                        "y": [SECTOR_DISPLAY.get(sector, sector)],
-                        "name": "YES",
-                        "type": "bar",
-                        "orientation": "h",
-                        "marker": {"color": "#2ecc71"},
-                        "text": [f"{yes_pct:.1f}% ({yes_count})"],
-                        "textposition": "inside",
-                        "showlegend": True,
+                question_labels.append(short_form)
+                yes_percentages.append(yes_pct)
+                question_ids.append(qid)
+            
+            if not yes_percentages:
+                continue
+            
+            # Find max percentage for this sector to set as radial axis max
+            max_pct = max(yes_percentages)
+            # Round up to next 5% for cleaner scale, but ensure at least 10% minimum
+            max_range = max(10, ((int(max_pct) // 5) + 1) * 5)
+            
+            # Create radial bar chart (barpolar)
+            # Calculate angles evenly distributed around circle
+            n_questions = len(question_labels)
+            angles = [360 * i / n_questions for i in range(n_questions)]
+            
+            # Generate tick marks based on max_range
+            num_ticks = 5
+            tick_step = max_range / num_ticks
+            tickvals = [i * tick_step for i in range(num_ticks + 1)]
+            ticktext = [f"{t:.0f}%" for t in tickvals]
+            
+            trace = {
+                "type": "barpolar",
+                "r": yes_percentages,
+                "theta": angles,
+                "text": [f"{label}<br>{pct:.1f}%" for label, pct in zip(question_labels, yes_percentages)],
+                "textposition": "outside",
+                "marker": {
+                    "color": yes_percentages,
+                    "colorscale": [[0, "#e74c3c"], [0.5, "#f39c12"], [1, "#2ecc71"]],
+                    "cmin": 0,
+                    "cmax": max_range,
+                    "line": {"color": "#161b22", "width": 1},
+                },
+                "hovertemplate": "<b>%{text}</b><br>YES: %{r:.1f}%<extra></extra>",
+            }
+            
+            cid = f"survey_radial_{sector}"
+            radial_layout = {
+                "polar": {
+                    "radialaxis": {
+                        "range": [0, max_range],
+                        "tickvals": tickvals,
+                        "ticktext": ticktext,
+                        "tickfont": {"size": 10, "color": "#e6edf3"},
+                        "gridcolor": "#30363d",
+                        "linecolor": "#30363d",
                     },
-                    {
-                        "x": [no_pct],
-                        "y": [SECTOR_DISPLAY.get(sector, sector)],
-                        "name": "NO",
-                        "type": "bar",
-                        "orientation": "h",
-                        "marker": {"color": "#e74c3c"},
-                        "text": [f"{no_pct:.1f}% ({no_count})"],
-                        "textposition": "inside",
-                        "showlegend": True,
-                    }
-                ]
-                
-                cid = _chart_id(qid, "")
-                survey_layout = {
-                    "barmode": "stack",
-                    "bargap": 0.2,
-                    "height": 100,
-                    "margin": {"l": 85, "t": 10, "b": 15, "r": 20},
-                    "xaxis": {"title": "Percentage", "range": [0, 100], "color": "#e6edf3", "gridcolor": "#30363d", "titlefont": {"size": 10}, "tickfont": {"size": 9}},
-                    "yaxis": {"color": "#e6edf3", "gridcolor": "#30363d", "tickfont": {"size": 9}},
-                    "showlegend": True,
-                    "paper_bgcolor": "#161b22",
-                    "plot_bgcolor": "#161b22",
-                    "font": {"color": "#e6edf3", "size": 10},
-                    "legend": {"font": {"color": "#e6edf3", "size": 9}, "orientation": "h", "yanchor": "bottom", "y": -0.35, "xanchor": "center", "x": 0.5},
-                }
-                survey_fig = {"data": traces, "layout": survey_layout}
-                html_parts.append(f'<div class="chart" id="chart_{cid}"></div>\n')
-                html_parts.append(
-                    f'<script>var fig_{cid} = {json.dumps(survey_fig)}; Plotly.newPlot("chart_{cid}", fig_{cid}.data, fig_{cid}.layout);</script>\n'
-                )
+                    "angularaxis": {
+                        "tickmode": "array",
+                        "tickvals": angles,
+                        "ticktext": question_labels,
+                        "tickfont": {"size": 9, "color": "#e6edf3"},
+                        "gridcolor": "#30363d",
+                        "linecolor": "#30363d",
+                        "rotation": 90,
+                        "direction": "counterclockwise",
+                    },
+                },
+                "height": 600,
+                "margin": {"l": 50, "t": 50, "r": 50, "b": 50},
+                "paper_bgcolor": "#161b22",
+                "plot_bgcolor": "#161b22",
+                "font": {"color": "#e6edf3", "size": 11},
+                "showlegend": False,
+            }
+            
+            radial_fig = {"data": [trace], "layout": radial_layout}
+            html_parts.append(f'<div class="chart" id="chart_{cid}"></div>\n')
+            html_parts.append(
+                f'<script>var fig_{cid} = {json.dumps(radial_fig)}; Plotly.newPlot("chart_{cid}", fig_{cid}.data, fig_{cid}.layout);</script>\n'
+            )
 
     html_parts.append("</body>\n</html>")
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
