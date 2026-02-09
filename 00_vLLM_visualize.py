@@ -301,7 +301,7 @@ a:hover { text-decoration: underline; }
 
         if qid == "1.1_gate":
             # Create 4-subplot row: Author stance (1/3) + 3 gate donuts (2/3)
-            html_parts.append('<div style="display: flex; align-items: center; gap: 15px; margin: 6px 0;">\n')
+            html_parts.append('<div style="display: flex; gap: 15px; margin: 6px 0;">\n')
 
             # Add Author stance chart (1/3 width)
             if stance_chart_html:
@@ -311,8 +311,9 @@ a:hover { text-decoration: underline; }
 
             # Add gate donuts container (2/3 width) - title will be inside the chart box
             html_parts.append('<div class="chart" style="flex: 0 0 calc(66.67% - 15px); min-width: 0;">\n')
-            html_parts.append(f'<h3 style="font-size: 1.05em; color: #b0b0b0; margin: 0 0 8px 10px; padding-top: 6px;">{title}</h3>\n')
-            html_parts.append('<div style="display: flex; gap: 10px; justify-content: space-around; padding: 0 10px 10px 10px;">\n')
+            html_parts.append('<div style="background: #1a1a1a; padding: 2px 4px 0px 4px;">\n')
+            html_parts.append(f'<h3 style="font-size: 0.95em; color: #b0b0b0; margin: 0 0 0px 2px; font-weight: 400; font-family: Inter, Segoe UI, sans-serif;">{title}</h3>\n')
+            html_parts.append('<div style="display: flex; gap: 10px; justify-content: space-around;">\n')
 
             # Add gate donuts (3 subplots side by side)
             for i, sector in enumerate(sectors):
@@ -336,7 +337,7 @@ a:hover { text-decoration: underline; }
                     "font": {"color": "#e0e0e0", "size": 9},
                     "showlegend": i == 0,
                     "legend": {"orientation": "h", "yanchor": "top", "y": -0.12, "xanchor": "center", "x": 0.5, "font": {"size": 8, "color": "#e0e0e0"}},
-                    "margin": {"t": 26, "b": 75, "l": 5, "r": 5},
+                    "margin": {"t": 10, "b": 10, "l": 5, "r": 5},
                     "annotations": [{
                         "text": SECTOR_DISPLAY.get(sector, sector),
                         "x": 1,
@@ -356,6 +357,7 @@ a:hover { text-decoration: underline; }
                 html_parts.append(f'<script>var fig_{cid} = {json.dumps(gate_fig)}; Plotly.newPlot("chart_{cid}", fig_{cid}.data, fig_{cid}.layout);</script>\n')
 
             html_parts.append('</div>\n')  # Close donuts flex container
+            html_parts.append('</div>\n')  # Close background wrapper
             html_parts.append('</div>\n')  # Close gate donuts container
             html_parts.append('</div>\n')  # Close main row
             stance_chart_html = None  # Clear stored chart
@@ -1354,24 +1356,24 @@ def build_confidence_analysis_section(samples_path: str) -> List[str]:
     html.append('<div style="display: flex; justify-content: center; gap: 15px; margin: 20px 0; flex-wrap: wrap;">\n')
 
     # Overall mismatch rate
-    html.append(f'<div style="background: #1a1a1a; padding: 15px 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 140px;">')
-    html.append(f'<div style="font-size: 2em; font-weight: 600; color: {"#8fcc8f" if overall_mismatch_rate < 15 else "#ffb87a" if overall_mismatch_rate < 30 else "#ff9aa8"};">{overall_mismatch_rate:.1f}%</div>')
-    html.append(f'<div style="font-size: 0.8em; color: #a0a0a0;">Mismatch Rate</div></div>\n')
+    html.append(f'<div style="background: #1a1a1a; padding: 10px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 140px;">')
+    html.append(f'<div style="font-size: 1.4em; font-weight: 600; color: {"#8fcc8f" if overall_mismatch_rate < 15 else "#ffb87a" if overall_mismatch_rate < 30 else "#ff9aa8"};">{overall_mismatch_rate:.1f}%</div>')
+    html.append(f'<div style="font-size: 0.7em; color: #a0a0a0;">Mismatch Rate</div></div>\n')
 
     # Avg confidence (match)
-    html.append(f'<div style="background: #1a1a1a; padding: 15px 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 140px;">')
-    html.append(f'<div style="font-size: 2em; font-weight: 600; color: #8fcc8f;">{avg_confidence_match:.3f}</div>')
-    html.append(f'<div style="font-size: 0.8em; color: #a0a0a0;">Avg Conf (Match)</div></div>\n')
+    html.append(f'<div style="background: #1a1a1a; padding: 10px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 140px;">')
+    html.append(f'<div style="font-size: 1.4em; font-weight: 600; color: #8fcc8f;">{avg_confidence_match:.3f}</div>')
+    html.append(f'<div style="font-size: 0.7em; color: #a0a0a0;">Avg Conf (Match)</div></div>\n')
 
     # Avg confidence (mismatch)
-    html.append(f'<div style="background: #1a1a1a; padding: 15px 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 140px;">')
-    html.append(f'<div style="font-size: 2em; font-weight: 600; color: #ff9aa8;">{avg_confidence_mismatch:.3f}</div>')
-    html.append(f'<div style="font-size: 0.8em; color: #a0a0a0;">Avg Conf (Mismatch)</div></div>\n')
+    html.append(f'<div style="background: #1a1a1a; padding: 10px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 140px;">')
+    html.append(f'<div style="font-size: 1.4em; font-weight: 600; color: #ff9aa8;">{avg_confidence_mismatch:.3f}</div>')
+    html.append(f'<div style="font-size: 0.7em; color: #a0a0a0;">Avg Conf (Mismatch)</div></div>\n')
 
     # Total samples
-    html.append(f'<div style="background: #1a1a1a; padding: 15px 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 140px;">')
-    html.append(f'<div style="font-size: 2em; font-weight: 600; color: #e0e0e0;">{total_samples}</div>')
-    html.append(f'<div style="font-size: 0.8em; color: #a0a0a0;">Total Comparisons</div></div>\n')
+    html.append(f'<div style="background: #1a1a1a; padding: 10px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 140px;">')
+    html.append(f'<div style="font-size: 1.4em; font-weight: 600; color: #e0e0e0;">{total_samples}</div>')
+    html.append(f'<div style="font-size: 0.7em; color: #a0a0a0;">Total Comparisons</div></div>\n')
 
     html.append('</div>\n')
 
@@ -1639,48 +1641,48 @@ def build_verification_section(verification_path: str, samples_path: Optional[st
     html.append('<div style="display: flex; justify-content: center; gap: 15px; margin: 20px 0; flex-wrap: wrap;">\n')
 
     # Accuracy card
-    html.append(f'<div style="background: #1a1a1a; padding: 15px 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 120px;">')
-    html.append(f'<div style="font-size: 2em; font-weight: 600; color: {"#8fcc8f" if mean_acc >= 0.85 else "#ffb87a" if mean_acc >= 0.70 else "#ff9aa8"};">{mean_acc:.1%}</div>')
-    html.append(f'<div style="font-size: 0.8em; color: #a0a0a0;">Accuracy</div></div>\n')
+    html.append(f'<div style="background: #1a1a1a; padding: 10px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 84px;">')
+    html.append(f'<div style="font-size: 1.4em; font-weight: 600; color: {"#8fcc8f" if mean_acc >= 0.85 else "#ffb87a" if mean_acc >= 0.70 else "#ff9aa8"};">{mean_acc:.1%}</div>')
+    html.append(f'<div style="font-size: 0.7em; color: #a0a0a0;">Accuracy</div></div>\n')
 
     # Cohen's kappa card
-    html.append(f'<div style="background: #1a1a1a; padding: 15px 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 120px;">')
-    html.append(f'<div style="font-size: 2em; font-weight: 600; color: {"#8fcc8f" if mean_kappa >= 0.80 else "#ffb87a" if mean_kappa >= 0.60 else "#ff9aa8"};">{mean_kappa:.2f}</div>')
-    html.append(f'<div style="font-size: 0.8em; color: #a0a0a0;">Cohen\'s κ</div></div>\n')
+    html.append(f'<div style="background: #1a1a1a; padding: 10px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 84px;">')
+    html.append(f'<div style="font-size: 1.4em; font-weight: 600; color: {"#8fcc8f" if mean_kappa >= 0.80 else "#ffb87a" if mean_kappa >= 0.60 else "#ff9aa8"};">{mean_kappa:.2f}</div>')
+    html.append(f'<div style="font-size: 0.7em; color: #a0a0a0;">Cohen\'s κ</div></div>\n')
 
     # Empty responses card
-    html.append(f'<div style="background: #1a1a1a; padding: 15px 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 120px;">')
-    html.append(f'<div style="font-size: 2em; font-weight: 600; color: {"#8fcc8f" if empty_pct < 5 else "#ffb87a" if empty_pct < 10 else "#ff9aa8"};">{empty_pct:.1f}%</div>')
-    html.append(f'<div style="font-size: 0.8em; color: #a0a0a0;">No Response</div></div>\n')
+    html.append(f'<div style="background: #1a1a1a; padding: 10px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 84px;">')
+    html.append(f'<div style="font-size: 1.4em; font-weight: 600; color: {"#8fcc8f" if empty_pct < 5 else "#ffb87a" if empty_pct < 10 else "#ff9aa8"};">{empty_pct:.1f}%</div>')
+    html.append(f'<div style="font-size: 0.7em; color: #a0a0a0;">No Response</div></div>\n')
 
     # Sample size card
-    html.append(f'<div style="background: #1a1a1a; padding: 15px 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 120px;">')
-    html.append(f'<div style="font-size: 2em; font-weight: 600; color: #e0e0e0;">{total_samples}</div>')
-    html.append(f'<div style="font-size: 0.8em; color: #a0a0a0;">Total Samples</div></div>\n')
+    html.append(f'<div style="background: #1a1a1a; padding: 10px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 84px;">')
+    html.append(f'<div style="font-size: 1.4em; font-weight: 600; color: #e0e0e0;">{total_samples}</div>')
+    html.append(f'<div style="font-size: 0.7em; color: #a0a0a0;">Total Samples</div></div>\n')
 
     # Confidence (Match) card
     if avg_confidence_match is not None:
-        html.append(f'<div style="background: #1a1a1a; padding: 15px 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 120px;">')
-        html.append(f'<div style="font-size: 2em; font-weight: 600; color: #8fcc8f;">{avg_confidence_match:.3f}</div>')
-        html.append(f'<div style="font-size: 0.8em; color: #a0a0a0;">Conf (Match)</div></div>\n')
+        html.append(f'<div style="background: #1a1a1a; padding: 10px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 84px;">')
+        html.append(f'<div style="font-size: 1.4em; font-weight: 600; color: #8fcc8f;">{avg_confidence_match:.3f}</div>')
+        html.append(f'<div style="font-size: 0.7em; color: #a0a0a0;">Conf (Match)</div></div>\n')
 
     # Confidence (Mismatch) card
     if avg_confidence_mismatch is not None:
-        html.append(f'<div style="background: #1a1a1a; padding: 15px 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 120px;">')
-        html.append(f'<div style="font-size: 2em; font-weight: 600; color: #ff9aa8;">{avg_confidence_mismatch:.3f}</div>')
-        html.append(f'<div style="font-size: 0.8em; color: #a0a0a0;">Conf (Mismatch)</div></div>\n')
+        html.append(f'<div style="background: #1a1a1a; padding: 10px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 84px;">')
+        html.append(f'<div style="font-size: 1.4em; font-weight: 600; color: #ff9aa8;">{avg_confidence_mismatch:.3f}</div>')
+        html.append(f'<div style="font-size: 0.7em; color: #a0a0a0;">Conf (Mismatch)</div></div>\n')
 
     # High-confidence accuracy card
     if high_conf_accuracy is not None:
-        html.append(f'<div style="background: #1a1a1a; padding: 15px 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 120px;">')
-        html.append(f'<div style="font-size: 2em; font-weight: 600; color: {"#8fcc8f" if high_conf_accuracy >= 0.85 else "#ffb87a" if high_conf_accuracy >= 0.70 else "#ff9aa8"};">{high_conf_accuracy:.1%}</div>')
-        html.append(f'<div style="font-size: 0.8em; color: #a0a0a0;">Acc (Conf &gt; 0.9)</div></div>\n')
+        html.append(f'<div style="background: #1a1a1a; padding: 10px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 84px;">')
+        html.append(f'<div style="font-size: 1.4em; font-weight: 600; color: {"#8fcc8f" if high_conf_accuracy >= 0.85 else "#ffb87a" if high_conf_accuracy >= 0.70 else "#ff9aa8"};">{high_conf_accuracy:.1%}</div>')
+        html.append(f'<div style="font-size: 0.7em; color: #a0a0a0;">Acc (Conf &gt; 0.9)</div></div>\n')
 
     # High-confidence samples card
     if high_conf_samples is not None:
-        html.append(f'<div style="background: #1a1a1a; padding: 15px 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 120px;">')
-        html.append(f'<div style="font-size: 2em; font-weight: 600; color: #e0e0e0;">{high_conf_samples}</div>')
-        html.append(f'<div style="font-size: 0.8em; color: #a0a0a0;">High-Conf Samples</div></div>\n')
+        html.append(f'<div style="background: #1a1a1a; padding: 10px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); text-align: center; min-width: 84px;">')
+        html.append(f'<div style="font-size: 1.4em; font-weight: 600; color: #e0e0e0;">{high_conf_samples}</div>')
+        html.append(f'<div style="font-size: 0.7em; color: #a0a0a0;">High-Conf Samples</div></div>\n')
 
     html.append('</div>\n')
 
@@ -1786,6 +1788,10 @@ def build_verification_section(verification_path: str, samples_path: Optional[st
             est_errors = [d["error"] for d in estimation_data_sorted]
             est_colors = ["#ff9aa8" if e > 0 else "#7cbcbe" for e in est_errors]
 
+            # Calculate symmetric range centered on zero
+            max_abs_error = max(abs(e) for e in est_errors) if est_errors else 50
+            x_range = [-max_abs_error * 1.1, max_abs_error * 1.1]  # Add 10% padding
+
             estimation_trace = {
                 "y": est_labels,
                 "x": est_errors,
@@ -1801,7 +1807,7 @@ def build_verification_section(verification_path: str, samples_path: Optional[st
 
             estimation_layout = {
                 "height": 500,
-                "margin": {"l": 220, "t": 25, "b": 35, "r": 50},
+                "margin": {"l": 180, "t": 25, "b": 35, "r": 50},
                 "xaxis": {
                     "title": "",
                     "color": "#b0b0b0",
@@ -1812,10 +1818,11 @@ def build_verification_section(verification_path: str, samples_path: Optional[st
                     "zeroline": True,
                     "zerolinecolor": "#b0b0b0",
                     "zerolinewidth": 1.5,
+                    "range": x_range,
                 },
                 "yaxis": {
                     "color": "#b0b0b0",
-                    "tickfont": {"size": 9, "color": "#b0b0b0"},
+                    "tickfont": {"size": 7, "color": "#b0b0b0"},
                 },
                 "paper_bgcolor": "#1a1a1a",
                 "plot_bgcolor": "#1a1a1a",
