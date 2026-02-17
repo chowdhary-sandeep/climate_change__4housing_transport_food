@@ -83,6 +83,8 @@ h1{text-align:center;font-size:1.3em;color:#fff;margin-bottom:2px;font-weight:30
 <span class="tab-sep"></span>
 <button class="tab-btn" onclick="showTab('survey')">Factors &amp; Barriers</button>
 <span class="tab-sep"></span>
+<button class="tab-btn" onclick="showTab('temporal')">Temporal</button>
+<span class="tab-sep"></span>
 <button class="tab-btn" onclick="showTab('verification')">Verification</button>
 <button class="tab-btn" onclick="showTab('examples')">Examples</button>
 </div>
@@ -151,6 +153,52 @@ h1{text-align:center;font-size:1.3em;color:#fff;margin-bottom:2px;font-weight:30
 <div style="flex:1;min-width:280px"><div style="text-align:center;color:#5ab4ac;font-size:0.85em;font-weight:600;letter-spacing:1px;margin-bottom:4px">FOOD</div><svg id="radial-food" viewBox="0 0 460 430" style="width:100%;max-width:460px;display:block;margin:auto"></svg></div>
 <div style="flex:1;min-width:280px"><div style="text-align:center;color:#af8dc3;font-size:0.85em;font-weight:600;letter-spacing:1px;margin-bottom:4px">TRANSPORT</div><svg id="radial-transport" viewBox="0 0 460 430" style="width:100%;max-width:460px;display:block;margin:auto"></svg></div>
 <div style="flex:1;min-width:280px"><div style="text-align:center;color:#f4a460;font-size:0.85em;font-weight:600;letter-spacing:1px;margin-bottom:4px">HOUSING</div><svg id="radial-housing" viewBox="0 0 460 430" style="width:100%;max-width:460px;display:block;margin:auto"></svg></div>
+</div>
+</div>
+</div>
+
+<!-- TAB: TEMPORAL TRENDS -->
+<div class="tab-content" id="tab-temporal">
+<div class="sec">
+<div class="sec-header">
+<div class="sec-title">Author Stance Over Time (% by year)</div>
+<button class="info-btn" onclick="toggleInfo(this)">?</button>
+</div>
+<div class="info-popup">Proportions of author stance categories per year within each sector. Shows how climate action support/opposition evolves from 2010-2024. Each column sums to 100%.</div>
+<div class="grid3">
+<div><div style="text-align:center;color:#5ab4ac;font-size:0.8em;font-weight:600;margin-bottom:2px">FOOD</div><div id="temporal-stance-food"></div></div>
+<div><div style="text-align:center;color:#af8dc3;font-size:0.8em;font-weight:600;margin-bottom:2px">TRANSPORT</div><div id="temporal-stance-transport"></div></div>
+<div><div style="text-align:center;color:#f4a460;font-size:0.8em;font-weight:600;margin-bottom:2px">HOUSING</div><div id="temporal-stance-housing"></div></div>
+</div>
+</div>
+<div class="sec" style="margin-top:16px">
+<div class="sec-header">
+<div class="sec-title">Norm Dimensions Over Time (% by year)</div>
+<button class="info-btn" onclick="toggleInfo(this)">?</button>
+</div>
+<div class="info-popup">How the distribution of norm classifications (descriptive, injunctive, second-order, perceived stance) changes across years. Each stacked area shows proportions within a single dimension.</div>
+<div class="temporal-dim-toggles" style="display:flex;gap:6px;margin-bottom:10px;justify-content:flex-start">
+<button class="sankey-toggle active" data-dim="1.2.1_descriptive" onclick="window._setTemporalDim(this.dataset.dim)">Descriptive</button>
+<button class="sankey-toggle" data-dim="1.2.2_injunctive" onclick="window._setTemporalDim(this.dataset.dim)">Injunctive</button>
+<button class="sankey-toggle" data-dim="1.3.3_second_order" onclick="window._setTemporalDim(this.dataset.dim)">Second-Order</button>
+<button class="sankey-toggle" data-dim="1.3.1b_perceived_reference_stance" onclick="window._setTemporalDim(this.dataset.dim)">Perceived Stance</button>
+</div>
+<div class="grid3">
+<div><div style="text-align:center;color:#5ab4ac;font-size:0.8em;font-weight:600;margin-bottom:2px">FOOD</div><div id="temporal-dim-food"></div></div>
+<div><div style="text-align:center;color:#af8dc3;font-size:0.8em;font-weight:600;margin-bottom:2px">TRANSPORT</div><div id="temporal-dim-transport"></div></div>
+<div><div style="text-align:center;color:#f4a460;font-size:0.8em;font-weight:600;margin-bottom:2px">HOUSING</div><div id="temporal-dim-housing"></div></div>
+</div>
+</div>
+<div class="sec" style="margin-top:16px">
+<div class="sec-header">
+<div class="sec-title">Survey Factors Over Time (% yes by year)</div>
+<button class="info-btn" onclick="toggleInfo(this)">?</button>
+</div>
+<div class="info-popup">Proportion of comments matching each survey question factor per year. Food has 13 factors, Transport 6, Housing 10. Stacked areas show how these behavioral/attitudinal factors evolve over time.</div>
+<div class="grid3">
+<div><div style="text-align:center;color:#5ab4ac;font-size:0.8em;font-weight:600;margin-bottom:2px">FOOD</div><div id="temporal-survey-food"></div></div>
+<div><div style="text-align:center;color:#af8dc3;font-size:0.8em;font-weight:600;margin-bottom:2px">TRANSPORT</div><div id="temporal-survey-transport"></div></div>
+<div><div style="text-align:center;color:#f4a460;font-size:0.8em;font-weight:600;margin-bottom:2px">HOUSING</div><div id="temporal-survey-housing"></div></div>
 </div>
 </div>
 </div>
@@ -466,6 +514,7 @@ function showTab(id) {
     });
     window.dispatchEvent(new Event('resize'));
     if(id==='norms'){setTimeout(function(){if(window._animateGauge)window._animateGauge();},100);setTimeout(function(){if(window._animateNorms)window._animateNorms();},100);setTimeout(initBubbles,200);}
+    if(id==='temporal') setTimeout(function(){if(window._animateTemporal)window._animateTemporal();},200);
     if(id==='survey') setTimeout(function(){if(window._animateSurvey)window._animateSurvey();},200);
     if(id==='verification') setTimeout(function(){if(window._animateVerification)window._animateVerification();},200);
 }
@@ -886,6 +935,110 @@ window._animateVerification=function(){
             transition:{duration:900,easing:'cubic-out'},frame:{duration:900}});
     },50);
 };
+
+// ═══════════════ TEMPORAL CHARTS ═══════════════
+(function(){
+    var YEARS=[2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
+    var tStance={"food": {"pro": {"2010": 16.5, "2011": 27.0, "2012": 26.5, "2013": 30.5, "2014": 23.0, "2015": 27.0, "2016": 28.5, "2017": 25.5, "2018": 25.5, "2019": 25.0, "2020": 26.5, "2021": 24.5, "2022": 20.0, "2023": 18.5, "2024": 23.0}, "against": {"2010": 8.0, "2011": 5.5, "2012": 6.0, "2013": 6.0, "2014": 6.5, "2015": 7.5, "2016": 9.0, "2017": 6.5, "2018": 9.5, "2019": 9.5, "2020": 11.0, "2021": 8.0, "2022": 9.5, "2023": 12.0, "2024": 11.5}, "against particular but pro": {"2010": 3.0, "2011": 4.0, "2012": 0.5, "2013": 2.5, "2014": 2.5, "2015": 2.5, "2016": 2.0, "2017": 2.5, "2018": 5.0, "2019": 0.5, "2020": 2.5, "2021": 5.0, "2022": 3.0, "2023": 3.0, "2024": 3.0}, "neither/mixed": {"2010": 52.0, "2011": 49.5, "2012": 48.0, "2013": 42.5, "2014": 48.0, "2015": 48.5, "2016": 45.0, "2017": 53.0, "2018": 46.0, "2019": 49.0, "2020": 44.5, "2021": 40.5, "2022": 48.0, "2023": 46.0, "2024": 41.5}, "pro but lack of options": {"2010": 20.5, "2011": 14.0, "2012": 19.0, "2013": 18.5, "2014": 20.0, "2015": 14.5, "2016": 15.5, "2017": 12.5, "2018": 14.0, "2019": 16.0, "2020": 15.5, "2021": 22.0, "2022": 19.5, "2023": 20.5, "2024": 21.0}}, "transport": {"pro": {"2010": 19.3, "2011": 18.3, "2012": 16.0, "2013": 10.0, "2014": 17.4, "2015": 14.5, "2016": 16.3, "2017": 12.7, "2018": 13.0, "2019": 9.6, "2020": 11.6, "2021": 7.2, "2022": 11.8, "2023": 8.4, "2024": 11.3}, "against": {"2010": 15.8, "2011": 11.3, "2012": 8.0, "2013": 11.0, "2014": 10.0, "2015": 5.5, "2016": 11.9, "2017": 12.2, "2018": 6.7, "2019": 6.0, "2020": 5.4, "2021": 5.9, "2022": 8.4, "2023": 12.9, "2024": 12.0}, "against particular but pro": {"2010": 0.0, "2011": 1.4, "2012": 0.5, "2013": 1.5, "2014": 1.5, "2015": 3.0, "2016": 3.5, "2017": 1.5, "2018": 1.0, "2019": 0.5, "2020": 1.8, "2021": 5.1, "2022": 3.8, "2023": 2.8, "2024": 2.3}, "neither/mixed": {"2010": 47.4, "2011": 59.2, "2012": 62.5, "2013": 55.5, "2014": 54.7, "2015": 59.0, "2016": 55.9, "2017": 55.6, "2018": 63.5, "2019": 62.8, "2020": 62.9, "2021": 62.0, "2022": 53.4, "2023": 61.4, "2024": 54.1}, "pro but lack of options": {"2010": 17.5, "2011": 9.9, "2012": 13.0, "2013": 22.0, "2014": 16.4, "2015": 18.0, "2016": 12.4, "2017": 18.0, "2018": 15.9, "2019": 21.1, "2020": 18.3, "2021": 19.8, "2022": 22.5, "2023": 14.5, "2024": 20.3}}, "housing": {"pro": {"2010": 27.9, "2011": 29.4, "2012": 22.0, "2013": 24.1, "2014": 23.9, "2015": 15.3, "2016": 18.1, "2017": 22.8, "2018": 16.4, "2019": 17.0, "2020": 13.8, "2021": 11.5, "2022": 12.1, "2023": 9.9, "2024": 15.5}, "against": {"2010": 14.0, "2011": 6.9, "2012": 6.0, "2013": 12.3, "2014": 10.0, "2015": 7.4, "2016": 4.8, "2017": 6.8, "2018": 4.8, "2019": 6.3, "2020": 5.2, "2021": 7.4, "2022": 8.4, "2023": 14.4, "2024": 9.9}, "against particular but pro": {"2010": 0.0, "2011": 0.6, "2012": 0.0, "2013": 3.0, "2014": 1.5, "2015": 2.0, "2016": 3.3, "2017": 3.4, "2018": 1.4, "2019": 2.4, "2020": 4.3, "2021": 2.3, "2022": 2.1, "2023": 4.1, "2024": 1.6}, "neither/mixed": {"2010": 39.5, "2011": 50.6, "2012": 59.0, "2013": 41.9, "2014": 48.8, "2015": 52.2, "2016": 55.7, "2017": 51.0, "2018": 54.1, "2019": 54.9, "2020": 53.8, "2021": 51.6, "2022": 54.8, "2023": 48.6, "2024": 51.2}, "pro but lack of options": {"2010": 18.6, "2011": 12.5, "2012": 13.0, "2013": 18.7, "2014": 15.9, "2015": 23.2, "2016": 18.1, "2017": 16.0, "2018": 23.2, "2019": 19.4, "2020": 22.9, "2021": 27.2, "2022": 22.6, "2023": 23.0, "2024": 21.8}}};
+    var tNorms={"food": {"1.2.1_descriptive": {"explicitly present": {"2010": 26.0, "2011": 31.5, "2012": 37.0, "2013": 34.0, "2014": 29.0, "2015": 30.0, "2016": 35.5, "2017": 32.0, "2018": 27.0, "2019": 25.0, "2020": 25.5, "2021": 24.5, "2022": 22.0, "2023": 24.0, "2024": 34.0}, "absent": {"2010": 22.5, "2011": 25.5, "2012": 16.5, "2013": 17.5, "2014": 22.0, "2015": 23.5, "2016": 26.0, "2017": 22.0, "2018": 26.5, "2019": 24.5, "2020": 32.5, "2021": 30.0, "2022": 30.0, "2023": 29.0, "2024": 23.5}, "unclear": {"2010": 51.5, "2011": 43.0, "2012": 46.5, "2013": 48.5, "2014": 49.0, "2015": 46.5, "2016": 38.5, "2017": 46.0, "2018": 46.5, "2019": 50.5, "2020": 42.0, "2021": 45.5, "2022": 48.0, "2023": 47.0, "2024": 42.5}}, "1.2.2_injunctive": {"present": {"2010": 5.5, "2011": 11.0, "2012": 11.0, "2013": 11.5, "2014": 9.5, "2015": 11.0, "2016": 11.5, "2017": 8.5, "2018": 7.0, "2019": 7.5, "2020": 9.0, "2021": 13.0, "2022": 11.0, "2023": 7.0, "2024": 10.0}, "absent": {"2010": 87.0, "2011": 85.0, "2012": 85.5, "2013": 84.0, "2014": 82.0, "2015": 82.0, "2016": 82.5, "2017": 87.0, "2018": 84.0, "2019": 87.0, "2020": 85.0, "2021": 77.5, "2022": 83.5, "2023": 87.0, "2024": 84.0}, "unclear": {"2010": 7.5, "2011": 4.0, "2012": 3.5, "2013": 4.5, "2014": 8.5, "2015": 7.0, "2016": 6.0, "2017": 4.5, "2018": 9.0, "2019": 5.5, "2020": 6.0, "2021": 9.5, "2022": 5.5, "2023": 6.0, "2024": 6.0}}, "1.3.3_second_order": {"2": {"2010": 10.5, "2011": 10.0, "2012": 13.0, "2013": 15.0, "2014": 14.0, "2015": 10.5, "2016": 15.5, "2017": 7.5, "2018": 9.5, "2019": 9.0, "2020": 11.5, "2021": 16.0, "2022": 16.0, "2023": 17.0, "2024": 13.5}, "1": {"2010": 21.0, "2011": 19.5, "2012": 21.0, "2013": 24.0, "2014": 21.0, "2015": 22.0, "2016": 17.0, "2017": 18.0, "2018": 22.5, "2019": 21.0, "2020": 16.5, "2021": 25.5, "2022": 23.0, "2023": 19.0, "2024": 23.0}, "0": {"2010": 68.5, "2011": 70.5, "2012": 66.0, "2013": 61.0, "2014": 65.0, "2015": 67.5, "2016": 67.5, "2017": 74.5, "2018": 68.0, "2019": 70.0, "2020": 72.0, "2021": 58.0, "2022": 61.0, "2023": 64.0, "2024": 63.5}}, "1.3.1b_perceived_reference_stance": {"pro": {"2010": 11.0, "2011": 14.5, "2012": 16.5, "2013": 21.0, "2014": 15.5, "2015": 17.5, "2016": 17.0, "2017": 15.5, "2018": 10.5, "2019": 18.5, "2020": 18.5, "2021": 16.0, "2022": 12.5, "2023": 14.0, "2024": 15.0}, "against": {"2010": 2.5, "2011": 5.5, "2012": 2.0, "2013": 4.5, "2014": 4.5, "2015": 6.0, "2016": 7.5, "2017": 4.0, "2018": 4.0, "2019": 3.5, "2020": 8.5, "2021": 7.5, "2022": 4.0, "2023": 6.5, "2024": 5.5}, "neither/mixed": {"2010": 86.5, "2011": 80.0, "2012": 81.5, "2013": 74.5, "2014": 80.0, "2015": 76.5, "2016": 75.5, "2017": 80.5, "2018": 85.5, "2019": 78.0, "2020": 73.0, "2021": 76.5, "2022": 83.5, "2023": 79.5, "2024": 79.5}}}, "transport": {"1.2.1_descriptive": {"explicitly present": {"2010": 3.5, "2011": 9.9, "2012": 12.5, "2013": 17.0, "2014": 21.4, "2015": 12.0, "2016": 13.9, "2017": 12.7, "2018": 12.5, "2019": 11.5, "2020": 12.5, "2021": 11.8, "2022": 16.8, "2023": 11.6, "2024": 18.8}, "absent": {"2010": 96.5, "2011": 74.6, "2012": 71.0, "2013": 66.5, "2014": 63.7, "2015": 71.0, "2016": 75.2, "2017": 71.7, "2018": 78.4, "2019": 75.2, "2020": 76.8, "2021": 73.0, "2022": 68.7, "2023": 75.5, "2024": 69.2}, "unclear": {"2010": 0.0, "2011": 15.5, "2012": 16.5, "2013": 16.5, "2014": 14.9, "2015": 17.0, "2016": 10.9, "2017": 15.6, "2018": 9.1, "2019": 13.3, "2020": 10.7, "2021": 15.2, "2022": 14.5, "2023": 12.9, "2024": 12.0}}, "1.2.2_injunctive": {"present": {"2010": 1.8, "2011": 4.2, "2012": 4.5, "2013": 3.0, "2014": 8.0, "2015": 8.0, "2016": 5.9, "2017": 5.4, "2018": 2.9, "2019": 3.7, "2020": 6.2, "2021": 5.1, "2022": 6.1, "2023": 4.0, "2024": 3.8}, "absent": {"2010": 96.5, "2011": 95.8, "2012": 92.5, "2013": 96.5, "2014": 90.0, "2015": 89.5, "2016": 92.6, "2017": 94.1, "2018": 97.1, "2019": 95.9, "2020": 92.9, "2021": 92.4, "2022": 92.4, "2023": 94.4, "2024": 93.6}, "unclear": {"2010": 1.8, "2011": 0.0, "2012": 3.0, "2013": 0.5, "2014": 2.0, "2015": 2.5, "2016": 1.5, "2017": 0.5, "2018": 0.0, "2019": 0.5, "2020": 0.9, "2021": 2.5, "2022": 1.5, "2023": 1.6, "2024": 2.6}}, "1.3.3_second_order": {"2": {"2010": 1.8, "2011": 15.5, "2012": 12.5, "2013": 8.5, "2014": 13.4, "2015": 12.5, "2016": 11.4, "2017": 7.8, "2018": 6.2, "2019": 11.5, "2020": 10.7, "2021": 11.0, "2022": 13.0, "2023": 10.0, "2024": 10.2}, "1": {"2010": 8.8, "2011": 9.9, "2012": 15.0, "2013": 21.0, "2014": 15.9, "2015": 14.5, "2016": 13.4, "2017": 19.0, "2018": 13.9, "2019": 16.5, "2020": 12.9, "2021": 19.8, "2022": 19.1, "2023": 15.7, "2024": 14.7}, "0": {"2010": 89.5, "2011": 74.6, "2012": 72.5, "2013": 70.5, "2014": 70.6, "2015": 73.0, "2016": 75.2, "2017": 73.2, "2018": 79.8, "2019": 72.0, "2020": 76.3, "2021": 69.2, "2022": 67.9, "2023": 74.3, "2024": 75.2}}, "1.3.1b_perceived_reference_stance": {"pro": {"2010": 50.9, "2011": 31.0, "2012": 31.5, "2013": 29.5, "2014": 38.3, "2015": 31.5, "2016": 35.6, "2017": 29.8, "2018": 29.3, "2019": 27.5, "2020": 29.9, "2021": 21.9, "2022": 27.5, "2023": 19.7, "2024": 30.5}, "against": {"2010": 7.0, "2011": 12.7, "2012": 15.5, "2013": 11.5, "2014": 11.9, "2015": 8.5, "2016": 9.4, "2017": 8.3, "2018": 5.8, "2019": 12.4, "2020": 7.6, "2021": 13.9, "2022": 13.0, "2023": 17.3, "2024": 15.0}, "neither/mixed": {"2010": 42.1, "2011": 56.3, "2012": 53.0, "2013": 59.0, "2014": 49.8, "2015": 60.0, "2016": 55.0, "2017": 62.0, "2018": 64.9, "2019": 60.1, "2020": 62.5, "2021": 64.1, "2022": 59.5, "2023": 63.1, "2024": 54.5}}}, "housing": {"1.2.1_descriptive": {"explicitly present": {"2010": 4.7, "2011": 8.1, "2012": 7.5, "2013": 7.4, "2014": 12.4, "2015": 16.3, "2016": 8.1, "2017": 11.2, "2018": 15.0, "2019": 16.5, "2020": 11.4, "2021": 16.6, "2022": 19.2, "2023": 12.8, "2024": 19.8}, "absent": {"2010": 81.4, "2011": 71.9, "2012": 73.5, "2013": 73.9, "2014": 68.7, "2015": 63.5, "2016": 71.0, "2017": 63.6, "2018": 63.3, "2019": 58.3, "2020": 67.6, "2021": 58.1, "2022": 56.5, "2023": 66.7, "2024": 58.3}, "unclear": {"2010": 14.0, "2011": 20.0, "2012": 19.0, "2013": 18.7, "2014": 18.9, "2015": 20.2, "2016": 21.0, "2017": 25.2, "2018": 21.7, "2019": 25.2, "2020": 21.0, "2021": 25.3, "2022": 24.3, "2023": 20.6, "2024": 21.8}}, "1.2.2_injunctive": {"present": {"2010": 0.0, "2011": 1.9, "2012": 3.5, "2013": 7.4, "2014": 7.5, "2015": 6.4, "2016": 5.2, "2017": 7.8, "2018": 6.3, "2019": 7.8, "2020": 6.7, "2021": 8.3, "2022": 6.7, "2023": 8.6, "2024": 11.1}, "absent": {"2010": 93.0, "2011": 95.0, "2012": 96.0, "2013": 91.1, "2014": 91.5, "2015": 92.6, "2016": 92.9, "2017": 87.9, "2018": 92.8, "2019": 91.7, "2020": 90.5, "2021": 90.8, "2022": 90.0, "2023": 88.5, "2024": 87.3}, "unclear": {"2010": 7.0, "2011": 3.1, "2012": 0.5, "2013": 1.5, "2014": 1.0, "2015": 1.0, "2016": 1.9, "2017": 4.4, "2018": 1.0, "2019": 0.5, "2020": 2.9, "2021": 0.9, "2022": 3.3, "2023": 2.9, "2024": 1.6}}, "1.3.3_second_order": {"2": {"2010": 7.0, "2011": 6.2, "2012": 8.5, "2013": 16.7, "2014": 11.9, "2015": 13.8, "2016": 8.6, "2017": 12.6, "2018": 9.7, "2019": 16.0, "2020": 11.9, "2021": 12.0, "2022": 13.4, "2023": 14.4, "2024": 12.3}, "1": {"2010": 11.6, "2011": 8.8, "2012": 13.0, "2013": 17.7, "2014": 12.9, "2015": 18.2, "2016": 17.6, "2017": 18.4, "2018": 18.8, "2019": 18.4, "2020": 18.1, "2021": 23.0, "2022": 16.7, "2023": 21.0, "2024": 18.7}, "0": {"2010": 81.4, "2011": 85.0, "2012": 78.5, "2013": 65.5, "2014": 75.1, "2015": 68.0, "2016": 73.8, "2017": 68.9, "2018": 71.5, "2019": 65.5, "2020": 70.0, "2021": 65.0, "2022": 69.9, "2023": 64.6, "2024": 69.0}}, "1.3.1b_perceived_reference_stance": {"pro": {"2010": 37.2, "2011": 38.1, "2012": 31.5, "2013": 33.5, "2014": 33.3, "2015": 24.6, "2016": 25.7, "2017": 25.2, "2018": 27.5, "2019": 23.3, "2020": 23.3, "2021": 19.4, "2022": 23.4, "2023": 18.9, "2024": 29.4}, "against": {"2010": 16.3, "2011": 11.9, "2012": 12.5, "2013": 13.8, "2014": 11.4, "2015": 12.8, "2016": 10.5, "2017": 14.1, "2018": 9.2, "2019": 10.7, "2020": 13.3, "2021": 14.3, "2022": 10.0, "2023": 15.6, "2024": 10.7}, "neither/mixed": {"2010": 46.5, "2011": 50.0, "2012": 56.0, "2013": 52.7, "2014": 55.2, "2015": 62.6, "2016": 63.8, "2017": 60.7, "2018": 63.3, "2019": 66.0, "2020": 63.3, "2021": 66.4, "2022": 66.5, "2023": 65.4, "2024": 59.9}}}};
+    var normDims={"1.2.1_descriptive": {"title": "Descriptive Norm", "cats": ["explicitly present", "absent", "unclear"], "colors": ["#7caed6", "#566a7a", "#8a9aa8"]}, "1.2.2_injunctive": {"title": "Injunctive Norm", "cats": ["present", "absent", "unclear"], "colors": ["#8fbfd9", "#566a7a", "#8a9aa8"]}, "1.3.3_second_order": {"title": "Second-Order Belief", "cats": ["2", "1", "0"], "display": ["strong", "weak", "none"], "colors": ["#b8a8c8", "#8fbfd9", "#8a9aa8"]}, "1.3.1b_perceived_reference_stance": {"title": "Perceived Stance", "cats": ["pro", "against", "neither/mixed"], "colors": ["#8fcc8f", "#ff9aa8", "#ffe87a"]}};
+    var tSurvey={"food": {"diet_1": {"2010": 9.0, "2011": 9.0, "2012": 7.5, "2013": 10.0, "2014": 5.0, "2015": 5.5, "2016": 4.5, "2017": 6.0, "2018": 4.5, "2019": 8.5, "2020": 4.5, "2021": 4.0, "2022": 3.0, "2023": 4.5, "2024": 3.5}, "diet_2": {"2010": 20.5, "2011": 16.5, "2012": 19.5, "2013": 24.0, "2014": 20.0, "2015": 17.5, "2016": 21.5, "2017": 19.0, "2018": 20.5, "2019": 18.5, "2020": 21.5, "2021": 30.5, "2022": 19.5, "2023": 19.5, "2024": 24.0}, "diet_3": {"2010": 6.5, "2011": 1.5, "2012": 2.5, "2013": 7.0, "2014": 4.0, "2015": 5.0, "2016": 5.0, "2017": 5.0, "2018": 3.5, "2019": 7.0, "2020": 4.0, "2021": 7.0, "2022": 4.0, "2023": 4.0, "2024": 5.5}, "diet_4": {"2010": 3.5, "2011": 4.0, "2012": 7.0, "2013": 12.0, "2014": 8.5, "2015": 6.5, "2016": 7.0, "2017": 4.5, "2018": 8.0, "2019": 8.0, "2020": 5.5, "2021": 9.5, "2022": 6.5, "2023": 1.5, "2024": 7.0}, "diet_5": {"2010": 5.0, "2011": 1.0, "2012": 6.0, "2013": 8.5, "2014": 5.5, "2015": 5.0, "2016": 4.5, "2017": 5.0, "2018": 4.5, "2019": 8.0, "2020": 3.0, "2021": 4.5, "2022": 4.0, "2023": 2.5, "2024": 5.5}, "diet_6": {"2010": 3.5, "2011": 1.5, "2012": 4.0, "2013": 5.5, "2014": 4.5, "2015": 5.0, "2016": 2.0, "2017": 2.5, "2018": 2.0, "2019": 4.0, "2020": 1.5, "2021": 4.0, "2022": 3.0, "2023": 4.5, "2024": 4.5}, "diet_8": {"2010": 0.0, "2011": 0.0, "2012": 0.0, "2013": 0.5, "2014": 0.0, "2015": 0.0, "2016": 0.0, "2017": 0.0, "2018": 0.5, "2019": 0.5, "2020": 0.0, "2021": 1.5, "2022": 0.0, "2023": 0.0, "2024": 0.0}, "diet_9": {"2010": 7.0, "2011": 7.5, "2012": 9.0, "2013": 14.5, "2014": 9.5, "2015": 7.0, "2016": 9.5, "2017": 8.0, "2018": 9.0, "2019": 9.0, "2020": 10.0, "2021": 11.0, "2022": 9.0, "2023": 3.5, "2024": 7.0}, "diet_10": {"2010": 9.5, "2011": 8.5, "2012": 12.5, "2013": 15.0, "2014": 10.5, "2015": 11.0, "2016": 15.0, "2017": 9.0, "2018": 9.0, "2019": 10.5, "2020": 7.0, "2021": 9.0, "2022": 7.5, "2023": 7.0, "2024": 12.0}, "diet_11": {"2010": 1.5, "2011": 1.5, "2012": 3.5, "2013": 2.5, "2014": 2.0, "2015": 3.5, "2016": 2.5, "2017": 1.5, "2018": 1.0, "2019": 6.5, "2020": 3.5, "2021": 7.0, "2022": 1.5, "2023": 2.0, "2024": 0.5}, "diet_13": {"2010": 16.0, "2011": 13.0, "2012": 18.5, "2013": 21.0, "2014": 18.5, "2015": 17.5, "2016": 20.5, "2017": 15.5, "2018": 15.0, "2019": 19.0, "2020": 16.0, "2021": 22.5, "2022": 15.5, "2023": 10.0, "2024": 17.5}, "diet_14": {"2010": 6.0, "2011": 4.5, "2012": 7.5, "2013": 6.0, "2014": 7.5, "2015": 7.0, "2016": 6.0, "2017": 6.0, "2018": 6.5, "2019": 10.0, "2020": 7.0, "2021": 8.5, "2022": 8.5, "2023": 8.5, "2024": 5.0}, "diet_17": {"2010": 7.0, "2011": 2.5, "2012": 2.5, "2013": 3.0, "2014": 4.5, "2015": 5.5, "2016": 3.0, "2017": 1.0, "2018": 4.5, "2019": 4.5, "2020": 0.0, "2021": 6.5, "2022": 4.0, "2023": 4.5, "2024": 3.5}}, "transport": {"ev_1": {"2010": 10.5, "2011": 4.2, "2012": 7.5, "2013": 5.5, "2014": 7.0, "2015": 5.0, "2016": 6.9, "2017": 4.9, "2018": 4.8, "2019": 2.8, "2020": 4.5, "2021": 3.8, "2022": 4.6, "2023": 3.2, "2024": 3.0}, "ev_2": {"2010": 5.3, "2011": 5.6, "2012": 6.5, "2013": 7.0, "2014": 11.4, "2015": 7.5, "2016": 9.9, "2017": 10.2, "2018": 7.2, "2019": 7.8, "2020": 6.7, "2021": 9.3, "2022": 14.1, "2023": 6.8, "2024": 6.8}, "ev_3": {"2010": 3.5, "2011": 1.4, "2012": 2.5, "2013": 7.5, "2014": 4.0, "2015": 5.5, "2016": 5.9, "2017": 10.2, "2018": 4.3, "2019": 3.7, "2020": 5.4, "2021": 2.5, "2022": 6.5, "2023": 2.8, "2024": 2.3}, "ev_4": {"2010": 5.3, "2011": 0.0, "2012": 2.0, "2013": 5.5, "2014": 2.5, "2015": 3.0, "2016": 5.4, "2017": 6.8, "2018": 3.4, "2019": 2.3, "2020": 5.4, "2021": 3.4, "2022": 8.4, "2023": 4.4, "2024": 4.1}, "ev_5": {"2010": 1.8, "2011": 0.0, "2012": 4.0, "2013": 4.5, "2014": 5.0, "2015": 3.5, "2016": 4.0, "2017": 3.9, "2018": 5.3, "2019": 3.7, "2020": 7.1, "2021": 4.2, "2022": 4.6, "2023": 2.8, "2024": 3.0}, "ev_6": {"2010": 1.8, "2011": 1.4, "2012": 4.5, "2013": 5.5, "2014": 3.5, "2015": 6.5, "2016": 5.0, "2017": 4.4, "2018": 4.3, "2019": 6.0, "2020": 3.1, "2021": 4.6, "2022": 6.5, "2023": 6.4, "2024": 6.0}}, "housing": {"solar_1": {"2010": 11.6, "2011": 8.8, "2012": 10.0, "2013": 8.9, "2014": 8.5, "2015": 10.3, "2016": 10.0, "2017": 9.2, "2018": 8.7, "2019": 7.8, "2020": 10.0, "2021": 7.4, "2022": 14.6, "2023": 11.9, "2024": 12.7}, "solar_2": {"2010": 30.2, "2011": 25.6, "2012": 19.5, "2013": 22.2, "2014": 17.9, "2015": 14.3, "2016": 15.2, "2017": 21.8, "2018": 13.0, "2019": 11.7, "2020": 10.0, "2021": 10.6, "2022": 13.4, "2023": 12.3, "2024": 11.9}, "solar_3": {"2010": 0.0, "2011": 1.2, "2012": 1.5, "2013": 3.4, "2014": 4.0, "2015": 2.5, "2016": 3.8, "2017": 4.4, "2018": 3.4, "2019": 4.9, "2020": 5.2, "2021": 5.5, "2022": 5.9, "2023": 5.3, "2024": 6.3}, "solar_4": {"2010": 0.0, "2011": 1.2, "2012": 1.0, "2013": 3.9, "2014": 5.5, "2015": 5.4, "2016": 4.8, "2017": 6.3, "2018": 4.8, "2019": 3.9, "2020": 5.2, "2021": 6.5, "2022": 8.8, "2023": 11.5, "2024": 8.7}, "solar_5": {"2010": 0.0, "2011": 1.9, "2012": 3.5, "2013": 3.9, "2014": 3.5, "2015": 3.4, "2016": 1.4, "2017": 5.3, "2018": 3.9, "2019": 2.4, "2020": 4.3, "2021": 2.8, "2022": 5.9, "2023": 1.6, "2024": 4.4}, "solar_6": {"2010": 0.0, "2011": 1.9, "2012": 1.0, "2013": 2.5, "2014": 2.5, "2015": 2.0, "2016": 7.1, "2017": 6.3, "2018": 2.4, "2019": 5.3, "2020": 1.4, "2021": 5.5, "2022": 5.4, "2023": 4.9, "2024": 5.2}, "solar_7": {"2010": 0.0, "2011": 0.0, "2012": 0.5, "2013": 1.5, "2014": 0.5, "2015": 0.5, "2016": 1.9, "2017": 1.9, "2018": 1.4, "2019": 2.9, "2020": 0.5, "2021": 2.3, "2022": 1.7, "2023": 1.2, "2024": 2.4}, "solar_8": {"2010": 0.0, "2011": 0.0, "2012": 0.5, "2013": 0.5, "2014": 0.5, "2015": 0.5, "2016": 1.0, "2017": 1.0, "2018": 0.0, "2019": 0.5, "2020": 1.4, "2021": 0.5, "2022": 1.7, "2023": 1.6, "2024": 3.2}, "solar_9": {"2010": 0.0, "2011": 1.2, "2012": 1.0, "2013": 2.5, "2014": 1.5, "2015": 2.5, "2016": 3.8, "2017": 2.4, "2018": 1.9, "2019": 4.9, "2020": 3.8, "2021": 7.4, "2022": 7.1, "2023": 4.1, "2024": 6.0}, "solar_10": {"2010": 0.0, "2011": 0.6, "2012": 2.0, "2013": 3.9, "2014": 3.5, "2015": 3.9, "2016": 4.8, "2017": 9.2, "2018": 5.3, "2019": 7.3, "2020": 9.5, "2021": 7.8, "2022": 9.6, "2023": 9.9, "2024": 8.3}}};
+    var surveyLabels={"diet_1": "Cite health as main reason for c...", "diet_2": "Protecting animals is 'moderatel...", "diet_3": "Helping to reduce global warming...", "diet_4": "Willing to eat more plant-based ...", "diet_5": "Willing to eat less red meat", "diet_6": "Willing to reduce dairy or use d...", "diet_8": "Willing to eat lab-grown meat (c...", "diet_9": "Taste is important for plant-bas...", "diet_10": "Convenience (ease/quick prep) is...", "diet_11": "Would switch if plant-based food...", "diet_13": "Nobody has ever asked them to ea...", "diet_14": "Barriers to plant-based eating (...", "diet_17": "Prefer meals with meat/dairy (id...", "ev_1": "Say EVs are better for the envir...", "ev_2": "Say EVs cost more up front", "ev_3": "Say EVs cost less to charge than...", "ev_4": "Extremely/very confident U.S. wi...", "ev_5": "Feel EVs are more fun to drive", "ev_6": "Believe EVs are more reliable th...", "solar_1": "View home solar panels as a majo...", "solar_2": "See solar as a way to help the e...", "solar_3": "Worry solar technology will beco...", "solar_4": "Believe it's difficult or imposs...", "solar_5": "Think local climate has insuffic...", "solar_6": "Have concerns about installer qu...", "solar_7": "Received inadequate post-install...", "solar_8": "Willing to pay for ongoing maint...", "solar_9": "Believe their system generates w...", "solar_10": "Lack confidence in using or unde..."};
+    var surveyIds={"food": ["diet_1", "diet_2", "diet_3", "diet_4", "diet_5", "diet_6", "diet_8", "diet_9", "diet_10", "diet_11", "diet_13", "diet_14", "diet_17"], "transport": ["ev_1", "ev_2", "ev_3", "ev_4", "ev_5", "ev_6"], "housing": ["solar_1", "solar_2", "solar_3", "solar_4", "solar_5", "solar_6", "solar_7", "solar_8", "solar_9", "solar_10"]};
+
+    var stanceCats=['pro','against','against particular but pro','neither/mixed','pro but lack of options'];
+    var stanceColors={'pro':'#8fcc8f','against':'#ff9aa8','against particular but pro':'#ffb87a','neither/mixed':'#ffe87a','pro but lack of options':'#8fbfd9'};
+    var stanceShort={'pro':'Pro','against':'Against','against particular but pro':'Against part.','neither/mixed':'Neither','pro but lack of options':'Pro (no opt.)'};
+
+    // Helper: stacked area chart (proportions)
+    function makeStackedArea(divId, years, catData, catNames, catColors, showLegend){
+        var traces=[];
+        catNames.forEach(function(cat,i){
+            var yvals=years.map(function(y){return catData[cat]?catData[cat][y]||0:0});
+            traces.push({x:years,y:yvals,name:cat,type:'scatter',mode:'lines',
+                stackgroup:'one',line:{width:1.5,color:catColors[i]},
+                marker:{color:catColors[i]},fillcolor:catColors[i].replace(')',',0.6)').replace('rgb','rgba'),
+                showlegend:showLegend,
+                hovertemplate:'<b>'+cat+'</b><br>%{x}: %{y:.1f}%<extra></extra>'
+            });
+        });
+        Plotly.newPlot(divId,traces,Object.assign({},DL,{
+            height:220,margin:{t:5,b:35,l:35,r:10},
+            xaxis:{tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40',dtick:3},
+            yaxis:{title:{text:'%',font:{size:9,color:'#6a8caf'}},tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40',range:[0,100]},
+            legend:{font:{size:7,color:'#b0c4d8'},orientation:'h',y:-0.18,x:0.5,xanchor:'center'}
+        }),PC);
+    }
+
+    // 1. Author Stance temporal (3 sectors)
+    ['food','transport','housing'].forEach(function(sec,i){
+        var catData=tStance[sec];
+        var names=stanceCats.map(function(c){return stanceShort[c]||c});
+        var colors=stanceCats.map(function(c){return stanceColors[c]});
+        // Remap catData keys to short names
+        var remapped={};
+        stanceCats.forEach(function(c,ci){remapped[names[ci]]=catData[c]});
+        makeStackedArea('temporal-stance-'+sec,YEARS,remapped,names,colors,i===2);
+    });
+
+    // 2. Norm Dimensions temporal (togglable)
+    var currentDim='1.2.1_descriptive';
+    function drawNormDim(dim){
+        var meta=normDims[dim];
+        var displayNames=meta.display||meta.cats;
+        ['food','transport','housing'].forEach(function(sec,i){
+            var divId='temporal-dim-'+sec;
+            var catData=tNorms[sec][dim];
+            // Remap to display names if provided
+            var remapped={};
+            meta.cats.forEach(function(c,ci){remapped[displayNames[ci]]=catData[c]});
+            makeStackedArea(divId,YEARS,remapped,displayNames,meta.colors,i===2);
+        });
+    }
+    drawNormDim(currentDim);
+    window._setTemporalDim=function(dim){
+        currentDim=dim;
+        drawNormDim(dim);
+        document.querySelectorAll('.temporal-dim-toggles .sankey-toggle').forEach(function(b){
+            b.classList.toggle('active',b.dataset.dim===dim);
+        });
+    };
+
+    // 3. Survey factors temporal (stacked per sector)
+    var surveyColorPalette=['#5ab4ac','#af8dc3','#f4a460','#8fcc8f','#ff9aa8','#8fbfd9','#ffb87a','#c49fc4','#7cadc6','#ffe87a','#a8b8c2','#ffa8c2','#b8a8c8'];
+    ['food','transport','housing'].forEach(function(sec,i){
+        var qids=surveyIds[sec];
+        var traces=[];
+        qids.forEach(function(qid,qi){
+            var yvals=YEARS.map(function(y){return tSurvey[sec][qid]?tSurvey[sec][qid][y]||0:0});
+            var shortLabel=surveyLabels[qid]||qid;
+            if(shortLabel.length>25) shortLabel=shortLabel.substring(0,22)+'...';
+            traces.push({x:YEARS,y:yvals,name:shortLabel,type:'scatter',mode:'lines',
+                stackgroup:'one',line:{width:1,color:surveyColorPalette[qi%surveyColorPalette.length]},
+                showlegend:true,
+                hovertemplate:'<b>'+(surveyLabels[qid]||qid)+'</b><br>%{x}: %{y:.1f}%<extra></extra>'
+            });
+        });
+        Plotly.newPlot('temporal-survey-'+sec,traces,Object.assign({},DL,{
+            height:320,margin:{t:5,b:35,l:35,r:10},
+            xaxis:{tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40',dtick:3},
+            yaxis:{title:{text:'% yes',font:{size:9,color:'#6a8caf'}},tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40'},
+            legend:{font:{size:6,color:'#b0c4d8'},orientation:'v',y:1,x:1.02,xanchor:'left'}
+        }),PC);
+    });
+
+    window._animateTemporal=function(){
+        // Redraw all temporal charts
+        ['food','transport','housing'].forEach(function(sec,i){
+            var catData=tStance[sec];
+            var names=stanceCats.map(function(c){return stanceShort[c]||c});
+            var colors=stanceCats.map(function(c){return stanceColors[c]});
+            var remapped={};stanceCats.forEach(function(c,ci){remapped[names[ci]]=catData[c]});
+            makeStackedArea('temporal-stance-'+sec,YEARS,remapped,names,colors,i===2);
+        });
+        drawNormDim(currentDim);
+    };
+})();
 
 window.addEventListener('load',function(){
     setTimeout(initBubbles,300);

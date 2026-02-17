@@ -2,6 +2,7 @@
 temp.py - Comprehensive visualization experiments with all dashboard data
 """
 import json
+from collections import defaultdict
 
 # Load data
 with open("paper4data/00_verification_results.json", "r", encoding="utf-8") as f:
@@ -9,6 +10,133 @@ with open("paper4data/00_verification_results.json", "r", encoding="utf-8") as f
 
 with open("paper4data/00_verification_samples.json", "r", encoding="utf-8") as f:
     vs = json.load(f)
+
+# Load full labeled data for temporal analysis
+with open("paper4data/norms_labels.json", "r", encoding="utf-8") as f:
+    labeled_data = json.load(f)
+
+# Load survey question metadata for labels
+with open("00_vllm_survey_question_final.json", "r", encoding="utf-8") as f:
+    survey_meta = json.load(f)
+
+# ═══════════════════════════════════════════════════════════════════
+# Compute temporal data for all variables
+# ═══════════════════════════════════════════════════════════════════
+YEARS = list(range(2010, 2025))
+
+# Survey question short labels
+SURVEY_LABELS = {}
+SURVEY_IDS = {"food": [], "transport": [], "housing": []}
+for sector_key, sec_lower in [("FOOD", "food"), ("TRANSPORT", "transport"), ("HOUSING", "housing")]:
+    for frame_data in survey_meta[sector_key].values():
+        for q in frame_data["questions"]:
+            qid = q["id"]
+            # Short label from wording
+            wording = q["wording"]
+            # Truncate to ~30 chars
+            if len(wording) > 35:
+                wording = wording[:32] + "..."
+            SURVEY_LABELS[qid] = wording
+            SURVEY_IDS[sec_lower].append(qid)
+
+# Compute survey question proportions by year per sector
+# temporal_survey[sector][qid] = {year: proportion_yes}
+temporal_survey = {}
+for sec in ["food", "transport", "housing"]:
+    temporal_survey[sec] = {}
+    for qid in SURVEY_IDS[sec]:
+        year_yes = defaultdict(int)
+        year_total = defaultdict(int)
+        for rec in labeled_data[sec]:
+            y = rec.get("year")
+            if y is None or y < 2010:
+                continue
+            ans = rec.get("answers", {}).get(qid)
+            if ans is not None:
+                year_total[y] += 1
+                if str(ans).strip().lower() == "yes":
+                    year_yes[y] += 1
+        props = {}
+        for y in YEARS:
+            if year_total[y] > 0:
+                props[y] = round(year_yes[y] / year_total[y] * 100, 1)
+            else:
+                props[y] = 0
+        temporal_survey[sec][qid] = props
+
+# Compute norm stance proportions by year per sector (already in dashboard but as counts)
+# temporal_stance[sector] = {stance_label: {year: proportion}}
+STANCE_LABELS = ["pro", "against", "against particular but pro", "neither/mixed", "pro but lack of options"]
+STANCE_COLORS = {"pro": "#8fcc8f", "against": "#ff9aa8", "against particular but pro": "#ffb87a",
+                 "neither/mixed": "#ffe87a", "pro but lack of options": "#8fbfd9"}
+
+temporal_stance = {}
+for sec in ["food", "transport", "housing"]:
+    temporal_stance[sec] = {sl: {} for sl in STANCE_LABELS}
+    year_counts = defaultdict(lambda: defaultdict(int))
+    year_totals = defaultdict(int)
+    for rec in labeled_data[sec]:
+        y = rec.get("year")
+        if y is None or y < 2010:
+            continue
+        stance = rec.get("answers", {}).get("1.1.1_stance", "")
+        if stance:
+            year_counts[y][stance.strip().lower()] += 1
+            year_totals[y] += 1
+    for sl in STANCE_LABELS:
+        for y in YEARS:
+            if year_totals[y] > 0:
+                temporal_stance[sec][sl][y] = round(year_counts[y].get(sl, 0) / year_totals[y] * 100, 1)
+            else:
+                temporal_stance[sec][sl][y] = 0
+
+# Compute norm dimension proportions by year per sector
+# For descriptive/injunctive: "present" vs "absent" vs "unclear"
+# For second_order: "1" (strong) vs "0" (none/weak)
+# For perceived_stance: categories
+NORM_DIMS = {
+    "1.2.1_descriptive": {"title": "Descriptive Norm", "cats": ["explicitly present", "absent", "unclear"],
+                          "colors": ["#7caed6", "#566a7a", "#8a9aa8"]},
+    "1.2.2_injunctive": {"title": "Injunctive Norm", "cats": ["present", "absent", "unclear"],
+                         "colors": ["#8fbfd9", "#566a7a", "#8a9aa8"]},
+    "1.3.3_second_order": {"title": "Second-Order Belief", "cats": ["2", "1", "0"],
+                           "display": ["strong", "weak", "none"],
+                           "colors": ["#b8a8c8", "#8fbfd9", "#8a9aa8"]},
+    "1.3.1b_perceived_reference_stance": {"title": "Perceived Stance", "cats": ["pro", "against", "neither/mixed"],
+                                          "colors": ["#8fcc8f", "#ff9aa8", "#ffe87a"]},
+}
+
+temporal_norms = {}
+for sec in ["food", "transport", "housing"]:
+    temporal_norms[sec] = {}
+    for qid, meta in NORM_DIMS.items():
+        temporal_norms[sec][qid] = {cat: {} for cat in meta["cats"]}
+        year_counts = defaultdict(lambda: defaultdict(int))
+        year_totals = defaultdict(int)
+        for rec in labeled_data[sec]:
+            y = rec.get("year")
+            if y is None or y < 2010:
+                continue
+            val = rec.get("answers", {}).get(qid, "")
+            if val is not None:
+                val_str = str(val).strip().lower()
+                year_counts[y][val_str] += 1
+                year_totals[y] += 1
+        for cat in meta["cats"]:
+            for y in YEARS:
+                if year_totals[y] > 0:
+                    temporal_norms[sec][qid][cat][y] = round(year_counts[y].get(cat, 0) / year_totals[y] * 100, 1)
+                else:
+                    temporal_norms[sec][qid][cat][y] = 0
+
+# Serialize temporal data to JSON for JS injection
+temporal_survey_js = json.dumps(temporal_survey)
+temporal_stance_js = json.dumps(temporal_stance)
+temporal_norms_js = json.dumps(temporal_norms)
+norm_dims_js = json.dumps(NORM_DIMS)
+survey_labels_js = json.dumps(SURVEY_LABELS)
+survey_ids_js = json.dumps(SURVEY_IDS)
+years_js = json.dumps(YEARS)
 
 # ═══════════════════════════════════════════════════════════════════
 # Build examples HTML from verification samples
@@ -293,6 +421,8 @@ h1{text-align:center;font-size:1.3em;color:#fff;margin-bottom:2px;font-weight:30
 <span class="tab-sep"></span>
 <button class="tab-btn" onclick="showTab('survey')">Factors &amp; Barriers</button>
 <span class="tab-sep"></span>
+<button class="tab-btn" onclick="showTab('temporal')">Temporal</button>
+<span class="tab-sep"></span>
 <button class="tab-btn" onclick="showTab('verification')">Verification</button>
 <button class="tab-btn" onclick="showTab('examples')">Examples</button>
 </div>
@@ -365,6 +495,52 @@ h1{text-align:center;font-size:1.3em;color:#fff;margin-bottom:2px;font-weight:30
 </div>
 </div>
 
+<!-- TAB: TEMPORAL TRENDS -->
+<div class="tab-content" id="tab-temporal">
+<div class="sec">
+<div class="sec-header">
+<div class="sec-title">Author Stance Over Time (% by year)</div>
+<button class="info-btn" onclick="toggleInfo(this)">?</button>
+</div>
+<div class="info-popup">Proportions of author stance categories per year within each sector. Shows how climate action support/opposition evolves from 2010-2024. Each column sums to 100%.</div>
+<div class="grid3">
+<div><div style="text-align:center;color:#5ab4ac;font-size:0.8em;font-weight:600;margin-bottom:2px">FOOD</div><div id="temporal-stance-food"></div></div>
+<div><div style="text-align:center;color:#af8dc3;font-size:0.8em;font-weight:600;margin-bottom:2px">TRANSPORT</div><div id="temporal-stance-transport"></div></div>
+<div><div style="text-align:center;color:#f4a460;font-size:0.8em;font-weight:600;margin-bottom:2px">HOUSING</div><div id="temporal-stance-housing"></div></div>
+</div>
+</div>
+<div class="sec" style="margin-top:16px">
+<div class="sec-header">
+<div class="sec-title">Norm Dimensions Over Time (% by year)</div>
+<button class="info-btn" onclick="toggleInfo(this)">?</button>
+</div>
+<div class="info-popup">How the distribution of norm classifications (descriptive, injunctive, second-order, perceived stance) changes across years. Each stacked area shows proportions within a single dimension.</div>
+<div class="temporal-dim-toggles" style="display:flex;gap:6px;margin-bottom:10px;justify-content:flex-start">
+<button class="sankey-toggle active" data-dim="1.2.1_descriptive" onclick="window._setTemporalDim(this.dataset.dim)">Descriptive</button>
+<button class="sankey-toggle" data-dim="1.2.2_injunctive" onclick="window._setTemporalDim(this.dataset.dim)">Injunctive</button>
+<button class="sankey-toggle" data-dim="1.3.3_second_order" onclick="window._setTemporalDim(this.dataset.dim)">Second-Order</button>
+<button class="sankey-toggle" data-dim="1.3.1b_perceived_reference_stance" onclick="window._setTemporalDim(this.dataset.dim)">Perceived Stance</button>
+</div>
+<div class="grid3">
+<div><div style="text-align:center;color:#5ab4ac;font-size:0.8em;font-weight:600;margin-bottom:2px">FOOD</div><div id="temporal-dim-food"></div></div>
+<div><div style="text-align:center;color:#af8dc3;font-size:0.8em;font-weight:600;margin-bottom:2px">TRANSPORT</div><div id="temporal-dim-transport"></div></div>
+<div><div style="text-align:center;color:#f4a460;font-size:0.8em;font-weight:600;margin-bottom:2px">HOUSING</div><div id="temporal-dim-housing"></div></div>
+</div>
+</div>
+<div class="sec" style="margin-top:16px">
+<div class="sec-header">
+<div class="sec-title">Survey Factors Over Time (% yes by year)</div>
+<button class="info-btn" onclick="toggleInfo(this)">?</button>
+</div>
+<div class="info-popup">Proportion of comments matching each survey question factor per year. Food has 13 factors, Transport 6, Housing 10. Stacked areas show how these behavioral/attitudinal factors evolve over time.</div>
+<div class="grid3">
+<div><div style="text-align:center;color:#5ab4ac;font-size:0.8em;font-weight:600;margin-bottom:2px">FOOD</div><div id="temporal-survey-food"></div></div>
+<div><div style="text-align:center;color:#af8dc3;font-size:0.8em;font-weight:600;margin-bottom:2px">TRANSPORT</div><div id="temporal-survey-transport"></div></div>
+<div><div style="text-align:center;color:#f4a460;font-size:0.8em;font-weight:600;margin-bottom:2px">HOUSING</div><div id="temporal-survey-housing"></div></div>
+</div>
+</div>
+</div>
+
 <!-- TAB 5: VERIFICATION -->
 <div class="tab-content" id="tab-verification">
 <div class="sec" style="padding:10px 16px">
@@ -408,6 +584,7 @@ function showTab(id) {
     });
     window.dispatchEvent(new Event('resize'));
     if(id==='norms'){setTimeout(function(){if(window._animateGauge)window._animateGauge();},100);setTimeout(function(){if(window._animateNorms)window._animateNorms();},100);setTimeout(initBubbles,200);}
+    if(id==='temporal') setTimeout(function(){if(window._animateTemporal)window._animateTemporal();},200);
     if(id==='survey') setTimeout(function(){if(window._animateSurvey)window._animateSurvey();},200);
     if(id==='verification') setTimeout(function(){if(window._animateVerification)window._animateVerification();},200);
 }
@@ -829,6 +1006,110 @@ window._animateVerification=function(){
     },50);
 };
 
+// ═══════════════ TEMPORAL CHARTS ═══════════════
+(function(){
+    var YEARS=TEMPORAL_YEARS;
+    var tStance=TEMPORAL_STANCE;
+    var tNorms=TEMPORAL_NORMS;
+    var normDims=TEMPORAL_NORM_DIMS;
+    var tSurvey=TEMPORAL_SURVEY;
+    var surveyLabels=TEMPORAL_SURVEY_LABELS;
+    var surveyIds=TEMPORAL_SURVEY_IDS;
+
+    var stanceCats=['pro','against','against particular but pro','neither/mixed','pro but lack of options'];
+    var stanceColors={'pro':'#8fcc8f','against':'#ff9aa8','against particular but pro':'#ffb87a','neither/mixed':'#ffe87a','pro but lack of options':'#8fbfd9'};
+    var stanceShort={'pro':'Pro','against':'Against','against particular but pro':'Against part.','neither/mixed':'Neither','pro but lack of options':'Pro (no opt.)'};
+
+    // Helper: stacked area chart (proportions)
+    function makeStackedArea(divId, years, catData, catNames, catColors, showLegend){
+        var traces=[];
+        catNames.forEach(function(cat,i){
+            var yvals=years.map(function(y){return catData[cat]?catData[cat][y]||0:0});
+            traces.push({x:years,y:yvals,name:cat,type:'scatter',mode:'lines',
+                stackgroup:'one',line:{width:1.5,color:catColors[i]},
+                marker:{color:catColors[i]},fillcolor:catColors[i].replace(')',',0.6)').replace('rgb','rgba'),
+                showlegend:showLegend,
+                hovertemplate:'<b>'+cat+'</b><br>%{x}: %{y:.1f}%<extra></extra>'
+            });
+        });
+        Plotly.newPlot(divId,traces,Object.assign({},DL,{
+            height:220,margin:{t:5,b:35,l:35,r:10},
+            xaxis:{tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40',dtick:3},
+            yaxis:{title:{text:'%',font:{size:9,color:'#6a8caf'}},tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40',range:[0,100]},
+            legend:{font:{size:7,color:'#b0c4d8'},orientation:'h',y:-0.18,x:0.5,xanchor:'center'}
+        }),PC);
+    }
+
+    // 1. Author Stance temporal (3 sectors)
+    ['food','transport','housing'].forEach(function(sec,i){
+        var catData=tStance[sec];
+        var names=stanceCats.map(function(c){return stanceShort[c]||c});
+        var colors=stanceCats.map(function(c){return stanceColors[c]});
+        // Remap catData keys to short names
+        var remapped={};
+        stanceCats.forEach(function(c,ci){remapped[names[ci]]=catData[c]});
+        makeStackedArea('temporal-stance-'+sec,YEARS,remapped,names,colors,i===2);
+    });
+
+    // 2. Norm Dimensions temporal (togglable)
+    var currentDim='1.2.1_descriptive';
+    function drawNormDim(dim){
+        var meta=normDims[dim];
+        var displayNames=meta.display||meta.cats;
+        ['food','transport','housing'].forEach(function(sec,i){
+            var divId='temporal-dim-'+sec;
+            var catData=tNorms[sec][dim];
+            // Remap to display names if provided
+            var remapped={};
+            meta.cats.forEach(function(c,ci){remapped[displayNames[ci]]=catData[c]});
+            makeStackedArea(divId,YEARS,remapped,displayNames,meta.colors,i===2);
+        });
+    }
+    drawNormDim(currentDim);
+    window._setTemporalDim=function(dim){
+        currentDim=dim;
+        drawNormDim(dim);
+        document.querySelectorAll('.temporal-dim-toggles .sankey-toggle').forEach(function(b){
+            b.classList.toggle('active',b.dataset.dim===dim);
+        });
+    };
+
+    // 3. Survey factors temporal (stacked per sector)
+    var surveyColorPalette=['#5ab4ac','#af8dc3','#f4a460','#8fcc8f','#ff9aa8','#8fbfd9','#ffb87a','#c49fc4','#7cadc6','#ffe87a','#a8b8c2','#ffa8c2','#b8a8c8'];
+    ['food','transport','housing'].forEach(function(sec,i){
+        var qids=surveyIds[sec];
+        var traces=[];
+        qids.forEach(function(qid,qi){
+            var yvals=YEARS.map(function(y){return tSurvey[sec][qid]?tSurvey[sec][qid][y]||0:0});
+            var shortLabel=surveyLabels[qid]||qid;
+            if(shortLabel.length>25) shortLabel=shortLabel.substring(0,22)+'...';
+            traces.push({x:YEARS,y:yvals,name:shortLabel,type:'scatter',mode:'lines',
+                stackgroup:'one',line:{width:1,color:surveyColorPalette[qi%surveyColorPalette.length]},
+                showlegend:true,
+                hovertemplate:'<b>'+(surveyLabels[qid]||qid)+'</b><br>%{x}: %{y:.1f}%<extra></extra>'
+            });
+        });
+        Plotly.newPlot('temporal-survey-'+sec,traces,Object.assign({},DL,{
+            height:320,margin:{t:5,b:35,l:35,r:10},
+            xaxis:{tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40',dtick:3},
+            yaxis:{title:{text:'% yes',font:{size:9,color:'#6a8caf'}},tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40'},
+            legend:{font:{size:6,color:'#b0c4d8'},orientation:'v',y:1,x:1.02,xanchor:'left'}
+        }),PC);
+    });
+
+    window._animateTemporal=function(){
+        // Redraw all temporal charts
+        ['food','transport','housing'].forEach(function(sec,i){
+            var catData=tStance[sec];
+            var names=stanceCats.map(function(c){return stanceShort[c]||c});
+            var colors=stanceCats.map(function(c){return stanceColors[c]});
+            var remapped={};stanceCats.forEach(function(c,ci){remapped[names[ci]]=catData[c]});
+            makeStackedArea('temporal-stance-'+sec,YEARS,remapped,names,colors,i===2);
+        });
+        drawNormDim(currentDim);
+    };
+})();
+
 window.addEventListener('load',function(){
     setTimeout(initBubbles,300);
     setTimeout(function(){if(window._animateNorms)window._animateNorms();},400);
@@ -871,6 +1152,14 @@ html = html.replace("SCATTER_LABELS", scatter_labels)
 html = html.replace("HC_QUESTIONS", hc_questions)
 html = html.replace("HC_VALUES", hc_values)
 html = html.replace("HC_COLORS", hc_colors)
+# Temporal data
+html = html.replace("TEMPORAL_YEARS", years_js)
+html = html.replace("TEMPORAL_STANCE", temporal_stance_js)
+html = html.replace("TEMPORAL_NORMS", temporal_norms_js)
+html = html.replace("TEMPORAL_NORM_DIMS", norm_dims_js)
+html = html.replace("TEMPORAL_SURVEY_LABELS", survey_labels_js)
+html = html.replace("TEMPORAL_SURVEY_IDS", survey_ids_js)
+html = html.replace("TEMPORAL_SURVEY", temporal_survey_js)
 
 with open("temp.html", "w", encoding="utf-8") as f:
     f.write(html)
