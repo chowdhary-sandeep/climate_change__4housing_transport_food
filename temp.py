@@ -139,74 +139,154 @@ survey_ids_js = json.dumps(SURVEY_IDS)
 years_js = json.dumps(YEARS)
 
 # ═══════════════════════════════════════════════════════════════════
-# Build examples HTML from verification samples
+# Build examples HTML from verification samples - 9-column layout
 # ═══════════════════════════════════════════════════════════════════
+import math as _math
+
+# Load norms schema for prompt text
+with open("00_vllm_ipcc_social_norms_schema.json", "r", encoding="utf-8") as f:
+    norms_schema = json.load(f)
+norms_prompts = {q["id"]: q["prompt"] for q in norms_schema["norms_questions"]}
+
+NORMS_Q_LABELS = [
+    ("1.1_gate", "Norm Signal (Gate)"),
+    ("1.1.1_stance", "Author Stance"),
+    ("1.2.1_descriptive", "Descriptive Norm"),
+    ("1.2.2_injunctive", "Injunctive Norm"),
+    ("1.3.1_reference_group", "Reference Group"),
+    ("1.3.1b_perceived_reference_stance", "Perceived Reference Stance"),
+    ("1.3.3_second_order", "Second-Order Belief"),
+]
+
+ALL_QS = []
+# Norms questions (all sectors)
+for qid, label in NORMS_Q_LABELS:
+    ALL_QS.append(("norms", qid, label, None))
+
+# Survey questions (sector-specific)
+survey_prompts = {}
+for sector_key, sec_lower in [("FOOD", "food"), ("TRANSPORT", "transport"), ("HOUSING", "housing")]:
+    for frame_data in survey_meta[sector_key].values():
+        for q in frame_data["questions"]:
+            qid = q["id"]
+            display = q.get("short_form") or q.get("wording", qid)
+            survey_prompts[qid] = q.get("prompt", "")
+            ALL_QS.append(("survey", qid, display, sec_lower))
+
+EX_SECTORS = ["food", "transport", "housing"]
+EX_SEC_LABELS = {"food": "FOOD", "transport": "TRANSPORT", "housing": "HOUSING"}
+EX_SEC_COLORS = {"food": "#5ab4ac", "transport": "#af8dc3", "housing": "#f4a460"}
+
+def _esc(text):
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+def _get_conf(sample, qid):
+    lp = sample.get("logprobs", {})
+    for k in [qid, qid.replace(" ", "_"), qid.replace("_", " ")]:
+        if k in lp:
+            return _math.exp(lp[k])
+    return None
+
 examples_html = ""
-question_order = [
-    ("norms", "1.1_gate", "Norm signal present (gate)"),
-    ("norms", "1.1.1_stance", "Author stance"),
-    ("norms", "1.2.1_descriptive", "Descriptive norm"),
-    ("norms", "1.2.2_injunctive", "Injunctive norm"),
-    ("norms", "1.3.1_reference_group", "Reference group"),
-    ("norms", "1.3.1b_perceived_reference_stance", "Perceived reference stance"),
-    ("norms", "1.3.3_second_order", "Second-order normative belief"),
-]
-
-# Add a few survey questions too
-survey_qs = [
-    ("survey", "diet 4", "Plant-based eating - social prompting"),
-    ("survey", "diet 6", "Food choice - animal welfare"),
-    ("survey", "ev 2", "EVs - purchase cost"),
-    ("survey", "solar 1", "Home solar - cost savings"),
-]
-question_order += survey_qs
-
-for task_type, qid, label in question_order:
+for task_type, qid, display_label, sector_filter in ALL_QS:
     samples = vs.get(task_type, {}).get(qid, [])
     if not samples:
         continue
-    # Get accuracy for this question
+
+    # Accuracy
     task_results = vr.get("by_task", {}).get(task_type, {}).get(qid, {})
     acc = task_results.get("accuracy", 0)
     acc_color = "#8fcc8f" if acc >= 0.85 else "#ffb87a" if acc >= 0.70 else "#ff9aa8"
 
-    # Separate matches and mismatches
-    matches = [s for s in samples if str(s.get("vllm_label","")).strip().lower() == str(s.get("reasoning_label","")).strip().lower()]
-    mismatches = [s for s in samples if str(s.get("vllm_label","")).strip().lower() != str(s.get("reasoning_label","")).strip().lower()]
+    # All unique answer labels (sorted)
+    seen_labels = {}
+    for s in samples:
+        lbl = str(s.get("vllm_label", "")).strip()
+        seen_labels[lbl] = seen_labels.get(lbl, 0) + 1
+    all_labels = sorted(seen_labels.keys())
 
-    examples_html += f'''<details class="ex-section" {"open" if acc < 0.70 else ""}>
-<summary><span style="color:{acc_color};font-weight:700;">{acc*100:.0f}%</span> {label} <span style="color:#4a6a8a;font-size:0.8em;">({qid})</span></summary>
-<div class="ex-content">
-<div style="margin-bottom:10px;color:#6a8caf;font-size:0.8em;">{len(matches)} matches, {len(mismatches)} mismatches out of {len(samples)} samples</div>
-'''
-    # Show up to 3 mismatches
-    if mismatches:
-        examples_html += '<div class="ex-group-title" style="color:#ff9aa8;">Disagreements</div>'
-        for s in mismatches[:4]:
-            comment = str(s.get("comment",""))[:250]
-            if len(str(s.get("comment",""))) > 250: comment += "..."
-            comment = comment.replace("<","&lt;").replace(">","&gt;").replace("&","&amp;")
-            examples_html += f'''<div class="ex-card mismatch">
-<div class="ex-comment">{comment}</div>
-<div class="ex-labels"><span class="ex-tag">Fast: <b>{s.get("vllm_label","")}</b></span>
-<span class="ex-tag reason">Reasoning: <b>{s.get("reasoning_label","")}</b></span>
-<span class="ex-sector">{s.get("sector","")}</span></div></div>
-'''
+    # Group samples by (label, sector) -> up to 3
+    grouped = {}
+    for s in samples:
+        lbl = str(s.get("vllm_label", "")).strip()
+        sec = str(s.get("sector", "")).strip().lower()
+        key = (lbl, sec)
+        if key not in grouped:
+            grouped[key] = []
+        if len(grouped[key]) < 3:
+            grouped[key].append(s)
 
-    # Show 2 matches
-    if matches:
-        examples_html += '<div class="ex-group-title" style="color:#8fcc8f;">Agreements</div>'
-        for s in matches[:2]:
-            comment = str(s.get("comment",""))[:250]
-            if len(str(s.get("comment",""))) > 250: comment += "..."
-            comment = comment.replace("<","&lt;").replace(">","&gt;").replace("&","&amp;")
-            examples_html += f'''<div class="ex-card match">
-<div class="ex-comment">{comment}</div>
-<div class="ex-labels"><span class="ex-tag">Both: <b>{s.get("vllm_label","")}</b></span>
-<span class="ex-sector">{s.get("sector","")}</span></div></div>
-'''
+    # Prompt text
+    if task_type == "norms":
+        prompt_text = norms_prompts.get(qid, "")
+    else:
+        prompt_text = survey_prompts.get(qid, "")
 
-    examples_html += '</div></details>\n'
+    prompt_esc = _esc(prompt_text[:800] + ("\u2026" if len(prompt_text) > 800 else ""))
+    prompt_drop = (
+        f'<details class="ex-prompt-drop">'
+        f'<summary>Read exact prompt &amp; choices sent to the LLM</summary>'
+        f'<div class="ex-prompt-box">{prompt_esc}</div>'
+        f'</details>'
+    )
+
+    # Column headers: FOOD 1/2/3, TRANSPORT 1/2/3, HOUSING 1/2/3
+    col_headers = ""
+    for sec in EX_SECTORS:
+        color = EX_SEC_COLORS[sec]
+        lbl_str = EX_SEC_LABELS[sec]
+        if sector_filter and sector_filter != sec:
+            col_headers += '<div class="ex-col-hdr ex-col-na">—</div>' * 3
+        else:
+            for ci in range(1, 4):
+                col_headers += f'<div class="ex-col-hdr" style="color:{color}">{lbl_str} {ci}</div>'
+
+    # Answer rows
+    answer_rows_html = ""
+    for lbl in all_labels:
+        row_cells = ""
+        for sec in EX_SECTORS:
+            if sector_filter and sector_filter != sec:
+                row_cells += '<div class="ex-cell ex-cell-na"></div>' * 3
+            else:
+                cell_samples = grouped.get((lbl, sec), [])
+                for ci in range(3):
+                    if ci < len(cell_samples):
+                        s = cell_samples[ci]
+                        comment_full = str(s.get("comment", ""))
+                        comment = comment_full[:220] + ("\u2026" if len(comment_full) > 220 else "")
+                        is_match = str(s.get("vllm_label","")).strip().lower() == str(s.get("reasoning_label","")).strip().lower()
+                        border_color = "#4ade80" if is_match else "#f87171"
+                        conf = _get_conf(s, qid)
+                        conf_badge = f'<span class="ex-conf">{conf*100:.0f}%</span>' if conf is not None else ""
+                        rsn = str(s.get("reasoning_label",""))[:25]
+                        row_cells += (
+                            f'<div class="ex-cell" style="border-left:3px solid {border_color}">'
+                            f'{conf_badge}'
+                            f'<div class="ex-comment">{_esc(comment)}</div>'
+                            f'<div class="ex-reason-lbl">Verify: <b>{_esc(rsn)}</b></div>'
+                            f'</div>'
+                        )
+                    else:
+                        row_cells += '<div class="ex-cell ex-cell-empty"></div>'
+
+        answer_rows_html += (
+            f'<div class="ex-answer-row">'
+            f'<div class="ex-answer-label">{_esc(lbl)}</div>'
+            f'<div class="ex-9grid">{row_cells}</div>'
+            f'</div>'
+        )
+
+    examples_html += (
+        f'<details class="ex-section">'
+        f'<summary><span style="color:{acc_color};font-weight:700">{acc*100:.0f}%</span>'
+        f' {_esc(display_label)} <span style="color:#4a6a8a;font-size:0.8em">({_esc(qid)})</span></summary>'
+        f'<div class="ex-content">'
+        f'{prompt_drop}'
+        f'<div class="ex-9grid ex-hdr-row">{col_headers}</div>'
+        f'{answer_rows_html}'
+        f'</div></details>\n'
+    )
 
 # ═══════════════════════════════════════════════════════════════════
 # Build verification data for JS
@@ -409,6 +489,21 @@ h1{text-align:center;font-size:1.3em;color:#fff;margin-bottom:2px;font-weight:30
 .ex-tag{background:#1a2a40;padding:2px 8px;border-radius:10px;font-size:0.85em;color:#b0c4d8}
 .ex-tag.reason{background:#2a1a30;color:#c49fc4}
 .ex-sector{font-size:0.75em;color:#4a6a8a;margin-left:auto}
+/* 9-col Examples grid */
+.ex-9grid{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
+.ex-hdr-row{margin-bottom:2px}
+.ex-col-hdr{font-size:0.6em;font-weight:700;letter-spacing:1px;padding:3px 2px;text-align:center;text-transform:uppercase;border-radius:3px 3px 0 0}
+.ex-col-na{color:#1a3050!important}
+.ex-cell{background:#0a1628;border-radius:3px;padding:7px 7px 5px;font-size:0.7em;line-height:1.45;min-height:70px;position:relative;border-left:3px solid transparent;word-break:break-word}
+.ex-cell-na{background:#070d1a;border-radius:3px;min-height:70px}
+.ex-cell-empty{background:#080f1c;border-radius:3px;min-height:70px;border-left:3px solid #0a1628}
+.ex-conf{position:absolute;top:3px;right:3px;font-size:0.65em;background:#1a3050;padding:1px 4px;border-radius:8px;color:#8fcc8f;font-weight:600}
+.ex-reason-lbl{margin-top:5px;font-size:0.8em;color:#5a7a9a}
+.ex-answer-row{margin-bottom:8px}
+.ex-answer-label{font-size:0.78em;font-weight:700;color:#c0d0e0;padding:4px 0 3px;text-transform:capitalize;letter-spacing:0.5px;border-bottom:1px solid #1a3050;margin-bottom:3px}
+.ex-prompt-drop{margin-bottom:8px}
+.ex-prompt-drop>summary{font-size:0.72em;color:#4a7aaf;cursor:pointer;padding:3px 0;user-select:none}
+.ex-prompt-box{background:#060c18;border:1px solid #1a3050;border-radius:6px;padding:10px;font-size:0.68em;color:#7a8a9a;font-family:monospace;white-space:pre-wrap;margin-top:5px;max-height:180px;overflow-y:auto}
 </style>
 </head>
 <body>
@@ -561,8 +656,10 @@ STAT_BOXES
 <!-- TAB 6: EXAMPLES -->
 <div class="tab-content" id="tab-examples">
 <div style="margin-bottom:12px;color:#6a8caf;font-size:0.82em">
-Verification examples from 50 samples per question. <span style="color:#8fcc8f">Green</span> = models agree. <span style="color:#ff9aa8">Red</span> = models disagree.
-Lowest-accuracy questions are expanded by default.
+All 36 questions (7 norm dimensions + 29 survey frames) &mdash; 3 examples per answer label per sector.
+<span style="color:#4ade80">&#9646;</span> Fast &amp; reasoning models agree &nbsp;&nbsp;
+<span style="color:#f87171">&#9646;</span> Models disagree &nbsp;&nbsp;
+Confidence % = logprob of fast model prediction.
 </div>
 EXAMPLES_PLACEHOLDER
 </div>
@@ -1170,4 +1267,4 @@ print(f"  2. Norm Dimensions (4 stacked bars + reference group bubbles)")
 print(f"  3. Author Stance (treemap)")
 print(f"  4. Factors & Barriers (3 radial charts)")
 print(f"  5. Verification (stat boxes + 4 charts)")
-print(f"  6. Examples ({len(question_order)} questions)")
+print(f"  6. Examples ({len(ALL_QS)} questions, 9-column layout)")
