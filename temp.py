@@ -380,7 +380,7 @@ for task_type, qid, display_label, sector_filter in ALL_QS:
 
     prompt_esc = _esc(prompt_text[:800] + ("\u2026" if len(prompt_text) > 800 else ""))
     prompt_drop = (
-        f'<details class="ex-prompt-drop">'
+        f'<details class="ex-prompt-drop" open>'
         f'<summary>Read exact prompt &amp; choices sent to the LLM</summary>'
         f'<div class="ex-prompt-box">{prompt_esc}</div>'
         f'</details>'
@@ -877,7 +877,7 @@ function initBubbles(){
     // Adaptive scale: largest bubble radius = 42% of column width, so chart stays bounded as data grows
     var maxVal=0;
     sectors.forEach(function(sec){bubbleData[sec].forEach(function(v){if(v>maxVal)maxVal=v;});});
-    var maxAllowedR=cw*0.42;
+    var maxAllowedR=cw*0.28;
     var rScale=maxVal>0?maxAllowedR/Math.sqrt(maxVal):1.5;
     sectors.forEach(function(sec,si){
         var cx=cw*si+cw/2;

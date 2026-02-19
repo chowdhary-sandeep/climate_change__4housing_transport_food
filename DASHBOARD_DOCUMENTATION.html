@@ -81,7 +81,7 @@ li::marker{color:#5ab4ac}
 .ref-plot{color:#e0e8f0}
 .ref-method{color:#6a8caf}
 /* References */
-.ref-list{font-size:0.78em;color:#8a9ab0;line-height:1.8}
+.ref-list{font-size:0.78em;color:#8a9ab0;line-height:1.8;padding-left:1.5em;overflow-wrap:break-word;word-break:break-word}
 .ref-list li{margin-bottom:2px}
 .ref-list li::marker{color:#3a5a7a}
 /* Responsive */
@@ -206,7 +206,7 @@ li::marker{color:#5ab4ac}
 </table>
 
 <h3>2.2 Sampling</h3>
-<p>From 3.7M keyword-matched comments, <strong>9,000 comments</strong> (3,000/sector) sampled with <strong>equal yearly representation</strong> (2010&ndash;2024). Food: uniform 200/year. Transport and housing: &ge;57 comments even in earliest years, slightly more in recent years reflecting Reddit&rsquo;s growth.</p>
+<p>From 3.7M keyword-matched comments, <strong>123,000 comments</strong> (41,000/sector) sampled with <strong>equal yearly representation</strong> (2010&ndash;2024). Food: ~2,730/year (uniform across 15 years). Transport and housing: variable per year reflecting Reddit&rsquo;s growth &mdash; transport from 128 (2012) to 3,762 (2023); housing from 327 (2012) to 4,049 (2024).</p>
 
 <h3>2.3 Labeling Schema</h3>
 
@@ -272,7 +272,7 @@ li::marker{color:#5ab4ac}
 
 <h3>3.2 Hierarchical Labeling</h3>
 <ol>
-<li>Load cache; sample 3,000/sector with equal yearly representation.</li>
+<li>Load cache; sample 41,000/sector with equal yearly representation.</li>
 <li>Query local vLLM instance (<strong>Mistral-7B-Instruct</strong>) with hierarchical cascade: gate &rarr; stance &rarr; norms &rarr; reference group &rarr; second-order beliefs; plus sector-specific survey prompts.</li>
 <li>Collect both label and <strong>log-probability</strong> (confidence score) for each response.</li>
 <li>Safety net: recheck &ldquo;against&rdquo; stance labels for &ldquo;pro but lack of options&rdquo; misclassification.</li>
@@ -349,7 +349,7 @@ li::marker{color:#5ab4ac}
 <div class="method-card">
 <div class="method-id">M4</div>
 <div class="method-name">Gauge &mdash; Norm Prevalence</div>
-<div class="method-desc">Plotly pie (hole: 0.65, clipped to half). Food 40.2%, Transport 11.6%, Housing 16.2%. 30-step animation with cubic ease-out.</div>
+<div class="method-desc">Plotly pie (hole: 0.65, clipped to half). Food 40.2%, Transport 14.7%, Housing 18.1%. 30-step animation with cubic ease-out.</div>
 </div>
 <div class="method-card">
 <div class="method-id">M5</div>
@@ -369,7 +369,7 @@ li::marker{color:#5ab4ac}
 <div class="method-card">
 <div class="method-id">M8</div>
 <div class="method-name">Bubble Pack &mdash; Ref Groups</div>
-<div class="method-desc">D3 force simulation. r = sqrt(count) &times; 2.2. 9 categories &times; 3 sectors with staggered reveal animation.</div>
+<div class="method-desc">D3 force simulation. r = sqrt(count) &times; rScale (adaptive: largest bubble &le; 28% of column width). 9 categories &times; 3 sectors with staggered reveal animation.</div>
 </div>
 <div class="method-card">
 <div class="method-id">M9</div>
@@ -384,7 +384,7 @@ li::marker{color:#5ab4ac}
 <div class="method-card">
 <div class="method-id">M11</div>
 <div class="method-name">Examples</div>
-<div class="method-desc">11 questions, 50 samples each. Up to 4 mismatches + 2 matches per question. Low-accuracy expanded by default.</div>
+<div class="method-desc">11 questions. 2 labeler+LLM+verifier agree + 1 disagree example per (question, label, sector). Prompt expanded by default.</div>
 </div>
 </div>
 
@@ -394,17 +394,17 @@ li::marker{color:#5ab4ac}
 <p><strong>Author Stance (Tab 2, Treemap):</strong></p>
 <table>
 <tr><th>Sector</th><th class="r">Pro</th><th class="r">Against</th><th class="r">Against part. but pro</th><th class="r">Neither/Mixed</th><th class="r">Pro but lack of opt.</th></tr>
-<tr><td><span class="badge food">Food</span></td><td class="r">735</td><td class="r">252</td><td class="r">83</td><td class="r">1,404</td><td class="r">526</td></tr>
-<tr><td><span class="badge transport">Transport</span></td><td class="r">372</td><td class="r">274</td><td class="r">66</td><td class="r">1,754</td><td class="r">534</td></tr>
-<tr><td><span class="badge housing">Housing</span></td><td class="r">531</td><td class="r">243</td><td class="r">69</td><td class="r">1,555</td><td class="r">602</td></tr>
+<tr><td><span class="badge food">Food</span></td><td class="r">9,873</td><td class="r">3,324</td><td class="r">973</td><td class="r">19,357</td><td class="r">7,473</td></tr>
+<tr><td><span class="badge transport">Transport</span></td><td class="r">5,180</td><td class="r">3,396</td><td class="r">916</td><td class="r">24,036</td><td class="r">7,472</td></tr>
+<tr><td><span class="badge housing">Housing</span></td><td class="r">6,614</td><td class="r">3,395</td><td class="r">1,160</td><td class="r">21,427</td><td class="r">8,404</td></tr>
 </table>
 
 <p><strong>Norm Signal Prevalence (Tab 1, Gauge):</strong></p>
 <table>
 <tr><th>Sector</th><th class="r">% with norm signal</th><th class="r">Count</th></tr>
-<tr><td><span class="badge food">Food</span></td><td class="r">40.2%</td><td class="r">1,206 / 3,000</td></tr>
-<tr><td><span class="badge transport">Transport</span></td><td class="r">11.6%</td><td class="r">348 / 3,000</td></tr>
-<tr><td><span class="badge housing">Housing</span></td><td class="r">16.2%</td><td class="r">486 / 3,000</td></tr>
+<tr><td><span class="badge food">Food</span></td><td class="r">40.2%</td><td class="r">16,476 / 41,000</td></tr>
+<tr><td><span class="badge transport">Transport</span></td><td class="r">14.7%</td><td class="r">6,030 / 41,000</td></tr>
+<tr><td><span class="badge housing">Housing</span></td><td class="r">18.1%</td><td class="r">7,410 / 41,000</td></tr>
 </table>
 </div>
 
