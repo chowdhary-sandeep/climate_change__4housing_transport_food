@@ -61,11 +61,8 @@ docs_body = docs_body.replace('9,000 records with comment', '123,000 records wit
 docs_body = docs_body.replace('Labeled Comments</div>', 'Labeled Comments (checkpoint)</div>')
 
 # ── 5. Scope docs CSS to #tab-docs ────────────────────────────────────────────
-# Drop html/body/* resets — irrelevant when nested
 docs_css = re.sub(r'(?:html|body|\*)\s*\{[^}]*\}', '', docs_css_raw)
-# Drop @media blocks (responsive tweaks not needed inside tab)
 docs_css = re.sub(r'@media[^{]*\{(?:[^{}]*|\{[^}]*\})*\}', '', docs_css, flags=re.DOTALL)
-# Prefix every remaining selector with #tab-docs for specificity isolation
 def prefix_sel(m):
     sels = m.group(1)
     body = m.group(2)

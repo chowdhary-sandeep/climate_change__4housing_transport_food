@@ -874,13 +874,18 @@ function initBubbles(){
     var sectors=['Food','Transport','Housing'],cw=w/3,nodes=[];
     var grandTotal=0;
     sectors.forEach(function(sec){bubbleData[sec].forEach(function(v){grandTotal+=v;});});
+    // Adaptive scale: largest bubble radius = 42% of column width, so chart stays bounded as data grows
+    var maxVal=0;
+    sectors.forEach(function(sec){bubbleData[sec].forEach(function(v){if(v>maxVal)maxVal=v;});});
+    var maxAllowedR=cw*0.42;
+    var rScale=maxVal>0?maxAllowedR/Math.sqrt(maxVal):1.5;
     sectors.forEach(function(sec,si){
         var cx=cw*si+cw/2;
         svg.append('text').attr('x',cx).attr('y',18).attr('class','bubble-sector-label').attr('text-anchor','middle').text(sec.toUpperCase());
         bubbleData.categories.forEach(function(cat,ci){
             var val=bubbleData[sec][ci];if(val===0)return;
             var pct=grandTotal>0?(val/grandTotal*100).toFixed(1):0;
-            nodes.push({sector:sec,category:cat,value:val,pct:pct,r:Math.sqrt(val)*1.5,color:bubbleData.colors[ci],cx:cx,cy:h/2+5,x:cx+(Math.random()-0.5)*40,y:h/2+5+(Math.random()-0.5)*40});
+            nodes.push({sector:sec,category:cat,value:val,pct:pct,r:Math.sqrt(val)*rScale,color:bubbleData.colors[ci],cx:cx,cy:h/2+5,x:cx+(Math.random()-0.5)*40,y:h/2+5+(Math.random()-0.5)*40});
         });
     });
     // Mark top-3 per sector by value
