@@ -1,6 +1,6 @@
 """
 Generate dashboard_checkpoints.html:
-  - Uses norms_labels_full.json (36k checkpoint data) for temporal analysis
+  - Uses norms_labels_full.json (123k checkpoint data, 41k/sector) for temporal analysis
   - Merges DASHBOARD_DOCUMENTATION.html as a Docs tab
   - Outputs dashboard_checkpoints.html
 """
@@ -16,7 +16,7 @@ code = code.replace(
 )
 code = code.replace(
     '9,000 comments',
-    '36,000 comments (checkpoint data)'
+    '123,000 comments (checkpoint data)'
 )
 code = code.replace(
     'open("temp.html", "w", encoding="utf-8")',
@@ -46,18 +46,18 @@ body_m = re.search(r'<body>(.*?)</body>', docs_html, re.DOTALL)
 docs_body = body_m.group(1).strip() if body_m else ''
 
 # ── 4b. Patch docs body for checkpoint data values ────────────────────────────
-# 36k total (12k/sector), ~600k labels
-docs_body = docs_body.replace('9,000 comments (3,000/sector)', '36,000 comments (12,000/sector)')
-docs_body = docs_body.replace('9,000 &times; 7 norms', '36,000 &times; 7 norms')
-docs_body = docs_body.replace('3,000 &times; 13', '12,000 &times; 13')
-docs_body = docs_body.replace('3,000 &times; 6', '12,000 &times; 6')
-docs_body = docs_body.replace('3,000 &times; 10', '12,000 &times; 10')
-docs_body = docs_body.replace('<b>150,000 individual labels</b>', '<b>~600,000 individual labels</b>')
-docs_body = docs_body.replace('>9,000<', '>36,000<')
-docs_body = docs_body.replace('>150K<', '>~600K<')
-docs_body = docs_body.replace('3,000/sector with equal yearly', '12,000/sector with equal yearly')
-docs_body = docs_body.replace('sample 3,000/sector', 'sample 12,000/sector')
-docs_body = docs_body.replace('9,000 records with comment', '36,000 records with comment')
+# 123k total (41k/sector), ~2.1M labels
+docs_body = docs_body.replace('9,000 comments (3,000/sector)', '123,000 comments (41,000/sector)')
+docs_body = docs_body.replace('9,000 &times; 7 norms', '123,000 &times; 7 norms')
+docs_body = docs_body.replace('3,000 &times; 13', '41,000 &times; 13')
+docs_body = docs_body.replace('3,000 &times; 6', '41,000 &times; 6')
+docs_body = docs_body.replace('3,000 &times; 10', '41,000 &times; 10')
+docs_body = docs_body.replace('<b>150,000 individual labels</b>', '<b>~2.1M individual labels</b>')
+docs_body = docs_body.replace('>9,000<', '>123,000<')
+docs_body = docs_body.replace('>150K<', '>~2.1M<')
+docs_body = docs_body.replace('3,000/sector with equal yearly', '41,000/sector with equal yearly')
+docs_body = docs_body.replace('sample 3,000/sector', 'sample 41,000/sector')
+docs_body = docs_body.replace('9,000 records with comment', '123,000 records with comment')
 docs_body = docs_body.replace('Labeled Comments</div>', 'Labeled Comments (checkpoint)</div>')
 
 # ── 5. Scope docs CSS to #tab-docs ────────────────────────────────────────────
