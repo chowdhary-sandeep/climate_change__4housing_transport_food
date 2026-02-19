@@ -31,7 +31,7 @@ h1{text-align:center;font-size:1.3em;color:#fff;margin-bottom:2px;font-weight:30
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .grid2>*,.grid3>*{min-width:0;overflow:hidden}
 .full{grid-column:1/-1}
-.gauge-clip{height:220px;overflow:hidden;position:relative}
+.gauge-clip{height:240px;overflow:hidden;position:relative}
 .bubble-chart{width:100%;height:260px}
 .bubble-chart svg{width:100%;height:100%}
 .bubble-label{fill:#fff;font-family:Inter,sans-serif;pointer-events:none;text-anchor:middle}
@@ -644,7 +644,7 @@ var DL={paper_bgcolor:DB,plot_bgcolor:DB,font:{color:'#ffffff',family:'Inter,san
     }],Object.assign({},DL,{height:440,margin:{t:5,b:5,l:5,r:5},
         annotations:[
             {text:'<b>0.0%</b>',x:0.5,y:0.55,font:{size:46,color:'#fff'},showarrow:false},
-            {text:'Avg Norm Signal',x:0.5,y:0.42,font:{size:12,color:'#6a8caf'},showarrow:false},
+            {text:'of comments contain social norm',x:0.5,y:0.48,font:{size:12,color:'#b0c4d8'},showarrow:false},
         ]
     }),PC);
     var _gTimer=null;
@@ -667,7 +667,7 @@ var DL={paper_bgcolor:DB,plot_bgcolor:DB,font:{color:'#ffffff',family:'Inter,san
 // ═══════════════ BUBBLES ═══════════════
 var bubbleData={
     categories:['family','partner/spouse','friends','coworkers','neighbors','local community','political tribe','online community','other reddit user'],
-    colors:['#a8b8c2','#c49fc4','#8fbfd9','#c692c6','#7cadc6','#7cc2b8','#a8b1b8','#b8b8b8','#ffa8c2'],
+    colors:['#e07878','#c8b448','#4db86e','#48aed0','#7878cc','#d05890','#96c040','#e09850','#9898a8'],
     Food:[551, 223, 1225, 460, 57, 427, 5, 85, 385],Transport:[138, 30, 86, 1421, 95, 298, 19, 59, 402],Housing:[109, 31, 80, 1518, 217, 414, 22, 51, 530]
 };
 function initBubbles(){
@@ -683,25 +683,45 @@ function initBubbles(){
         bubbleData.categories.forEach(function(cat,ci){
             var val=bubbleData[sec][ci];if(val===0)return;
             var pct=grandTotal>0?(val/grandTotal*100).toFixed(1):0;
-            nodes.push({category:cat,value:val,pct:pct,r:Math.sqrt(val)*1.5,color:bubbleData.colors[ci],cx:cx,cy:h/2+5,x:cx+(Math.random()-0.5)*40,y:h/2+5+(Math.random()-0.5)*40});
+            nodes.push({sector:sec,category:cat,value:val,pct:pct,r:Math.sqrt(val)*1.5,color:bubbleData.colors[ci],cx:cx,cy:h/2+5,x:cx+(Math.random()-0.5)*40,y:h/2+5+(Math.random()-0.5)*40});
         });
+    });
+    // Mark top-3 per sector by value
+    sectors.forEach(function(sec){
+        var sn=nodes.filter(function(d){return d.sector===sec;}).sort(function(a,b){return b.value-a.value;});
+        sn.slice(0,3).forEach(function(d){d.top3=true;});
     });
     svg.selectAll('.sep').data([1,2]).enter().append('line')
         .attr('x1',function(d){return cw*d}).attr('x2',function(d){return cw*d})
         .attr('y1',28).attr('y2',h-5).attr('stroke','#1a3050').attr('stroke-width',1).attr('stroke-dasharray','4,4');
-    var g=svg.selectAll('.b').data(nodes).enter().append('g');
+    // Shared hover tooltip
+    var _bTip=document.getElementById('_bubble_tip');
+    if(!_bTip){_bTip=document.createElement('div');_bTip.id='_bubble_tip';
+        _bTip.style.cssText='position:fixed;background:#1a3050;border:1px solid #3a6080;border-radius:6px;padding:6px 10px;font-size:0.78em;color:#e0e0e0;pointer-events:none;z-index:9999;display:none;line-height:1.5';
+        document.body.appendChild(_bTip);}
+    var g=svg.selectAll('.b').data(nodes).enter().append('g').style('cursor','default');
     g.append('circle').attr('cx',function(d){return d.x}).attr('cy',function(d){return d.y}).attr('r',0)
         .attr('fill',function(d){return d.color}).attr('fill-opacity',0.85).attr('stroke',function(d){return d.color}).attr('stroke-opacity',0.3).attr('stroke-width',2)
         .transition().duration(800).delay(function(d,i){return i*30}).attr('r',function(d){return d.r});
+    // Hover on circle shows tooltip for ALL bubbles
+    g.select('circle')
+        .on('mouseover',function(event,d){
+            _bTip.innerHTML='<b>'+d.category+'</b><br>'+d.value+' comments ('+d.pct+'%)';
+            _bTip.style.display='block';})
+        .on('mousemove',function(event){_bTip.style.left=(event.clientX+14)+'px';_bTip.style.top=(event.clientY-8)+'px';})
+        .on('mouseout',function(){_bTip.style.display='none';});
+    // Category label — top-3 only
     g.append('text').attr('x',function(d){return d.x}).attr('y',function(d){return d.y+(d.r>25?-12:d.r>15?-6:-2)}).attr('class','bubble-label')
         .attr('font-size',function(d){return Math.max(8,Math.min(d.r*0.6,13))+'px'}).attr('opacity',0)
-        .text(function(d){return d.value>=8?d.category:''}).transition().duration(600).delay(function(d,i){return 800+i*30}).attr('opacity',1);
+        .text(function(d){return d.top3?d.category:''}).transition().duration(600).delay(function(d,i){return 800+i*30}).attr('opacity',1);
+    // Count — top-3 only
     g.append('text').attr('x',function(d){return d.x}).attr('y',function(d){return d.y+(d.r>25?4:d.r>15?7:10)}).attr('class','bubble-label')
         .attr('font-size',function(d){return Math.max(9,Math.min(d.r*0.55,14))+'px'}).attr('font-weight','700').attr('opacity',0)
-        .text(function(d){return d.value}).transition().duration(600).delay(function(d,i){return 800+i*30}).attr('opacity',1);
+        .text(function(d){return d.top3?d.value:''}).transition().duration(600).delay(function(d,i){return 800+i*30}).attr('opacity',1);
+    // Percentage — top-3 only
     g.append('text').attr('x',function(d){return d.x}).attr('y',function(d){return d.y+(d.r>25?17:d.r>15?19:22)}).attr('class','bubble-label')
         .attr('font-size',function(d){return Math.max(7,Math.min(d.r*0.42,11))+'px'}).attr('opacity',0)
-        .text(function(d){return d.r>=12?'('+d.pct+'%)':''}).transition().duration(600).delay(function(d,i){return 800+i*30}).attr('opacity',1);
+        .text(function(d){return d.top3?'('+d.pct+'%)':''}).transition().duration(600).delay(function(d,i){return 800+i*30}).attr('opacity',1);
     d3.forceSimulation(nodes).force('x',d3.forceX(function(d){return d.cx}).strength(0.1))
         .force('y',d3.forceY(h/2+10).strength(0.08)).force('collide',d3.forceCollide(function(d){return d.r+2}).strength(0.95))
         .force('charge',d3.forceManyBody().strength(-1)).alpha(0.8)
