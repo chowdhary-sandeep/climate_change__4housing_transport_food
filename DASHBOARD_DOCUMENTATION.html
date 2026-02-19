@@ -46,12 +46,12 @@ ol,ul{margin:8px 0 12px 22px;font-size:0.88em}
 li{margin-bottom:4px}
 li::marker{color:#5ab4ac}
 /* Pipeline flow */
-.pipeline{display:flex;gap:0;justify-content:center;flex-wrap:wrap;margin:20px 0}
-.pipe-step{background:#12203a;border:1px solid #1a3050;border-radius:8px;padding:14px 18px;text-align:center;min-width:140px;flex:1;position:relative}
-.pipe-step:not(:last-child)::after{content:"\2192";position:absolute;right:-14px;top:50%;transform:translateY(-50%);color:#3a5a7a;font-size:1.3em;z-index:1}
-.pipe-num{font-size:1.6em;font-weight:700;color:#5ab4ac;display:block;line-height:1}
-.pipe-title{font-size:0.78em;color:#fff;font-weight:500;margin-top:4px}
-.pipe-detail{font-size:0.68em;color:#6a8caf;margin-top:2px}
+.pipeline{display:flex;flex-direction:row;flex-wrap:nowrap;gap:20px;align-items:stretch;margin:12px 0}
+.pipe-step{background:#12203a;border:1px solid #1a3050;border-radius:8px;padding:10px 12px;text-align:center;min-width:0;flex:1;position:relative}
+.pipe-step:not(:last-child)::after{content:"\2192";position:absolute;right:-16px;top:50%;transform:translateY(-50%);color:#3a5a7a;font-size:1.1em;z-index:1}
+.pipe-num{font-size:1.1em;font-weight:700;color:#5ab4ac;display:block;line-height:1}
+.pipe-title{font-size:0.75em;color:#fff;font-weight:600;margin-top:3px}
+.pipe-detail{font-size:0.62em;color:#6a8caf;margin-top:2px;line-height:1.3}
 /* Subreddit pills */
 .sub-pills{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
 .sub-pill{background:#12203a;border:1px solid #1a3050;border-radius:14px;padding:3px 12px;font-size:0.75em;color:#b0c4d8}

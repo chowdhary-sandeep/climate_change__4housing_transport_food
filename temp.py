@@ -136,6 +136,141 @@ survey_ids_js = json.dumps(SURVEY_IDS)
 years_js = json.dumps(YEARS)
 
 # ═══════════════════════════════════════════════════════════════════
+# Compute dynamic chart data from labeled_data (gauge/treemap/sankey/bubble/radial)
+# ═══════════════════════════════════════════════════════════════════
+# 1. Gate % (gauge)
+gate_pct = {}
+for _sec in ["food", "transport", "housing"]:
+    _total = len(labeled_data[_sec])
+    _yes = sum(1 for _r in labeled_data[_sec]
+               if str(_r.get("answers", {}).get("1.1_gate", "")).strip().lower()
+               in ("yes", "present", "1"))
+    gate_pct[_sec] = round(_yes / _total * 100, 1) if _total else 0
+
+# 2. Author stance counts (treemap)
+stance_counts = {}
+for _sec in ["food", "transport", "housing"]:
+    _c = defaultdict(int)
+    for _r in labeled_data[_sec]:
+        _v = str(_r.get("answers", {}).get("1.1.1_stance", "")).strip().lower()
+        if _v: _c[_v] += 1
+    stance_counts[_sec.capitalize()] = {
+        "pro":           _c.get("pro", 0),
+        "against":       _c.get("against", 0),
+        "abp":           _c.get("against particular but pro", 0),
+        "neither/mixed": _c.get("neither/mixed", 0),
+        "plo":           _c.get("pro but lack of options", 0),
+    }
+
+# 3. Sankey per-sector dimension counts
+sankey_data = {}
+for _sec in ["food", "transport", "housing"]:
+    _dc, _ic, _sc = defaultdict(int), defaultdict(int), defaultdict(int)
+    for _r in labeled_data[_sec]:
+        _ans = _r.get("answers", {})
+        _v = str(_ans.get("1.2.1_descriptive", "")).strip().lower()
+        if _v: _dc[_v] += 1
+        _v = str(_ans.get("1.2.2_injunctive", "")).strip().lower()
+        if _v: _ic[_v] += 1
+        _v = str(_ans.get("1.3.3_second_order", "")).strip()
+        if _v: _sc[_v] += 1
+    sankey_data[_sec.capitalize()] = {
+        "desc": [_dc.get("explicitly present", 0), _dc.get("absent", 0), _dc.get("unclear", 0)],
+        "inj":  [_ic.get("present", 0), _ic.get("absent", 0), _ic.get("unclear", 0)],
+        "sec":  [_sc.get("2", 0), _sc.get("1", 0), _sc.get("0", 0)],
+    }
+
+# 4. Reference group bubble counts
+_REF_CATS = ['family','partner/spouse','friends','coworkers','neighbors',
+             'local community','political tribe','online community','other reddit user']
+bubble_counts = {}
+for _sec in ["food", "transport", "housing"]:
+    _c = defaultdict(int)
+    for _r in labeled_data[_sec]:
+        _v = str(_r.get("answers", {}).get("1.3.1_reference_group", "")).strip().lower()
+        if _v in _REF_CATS: _c[_v] += 1
+    bubble_counts[_sec.capitalize()] = [_c.get(_cat, 0) for _cat in _REF_CATS]
+
+# 5. Sector totals
+sector_totals = {
+    "Food":      len(labeled_data["food"]),
+    "Transport": len(labeled_data["transport"]),
+    "Housing":   len(labeled_data["housing"]),
+}
+
+# 6. Radial chart values (% yes per survey question, same order as SURVEY_IDS)
+radial_vals = {}
+for _sec in ["food", "transport", "housing"]:
+    _total = len(labeled_data[_sec])
+    _pcts = []
+    for _qid in SURVEY_IDS[_sec]:
+        _yes = sum(1 for _r in labeled_data[_sec]
+                   if str(_r.get("answers", {}).get(_qid, "")).strip().lower() == "yes")
+        _pcts.append(round(_yes / _total * 100, 1) if _total else 0)
+    radial_vals[_sec] = _pcts
+
+_food_max_r      = max(5, round(max(radial_vals["food"],      default=25) * 1.3 / 5) * 5)
+_transport_max_r = max(5, round(max(radial_vals["transport"], default=10) * 1.3 / 5) * 5)
+_housing_max_r   = max(5, round(max(radial_vals["housing"],   default=15) * 1.3 / 5) * 5)
+
+# 7. Descriptive labels and full-question tooltips for radial charts
+def _radial_label(q):
+    """Use short_form directly (already captures question essence); fall back to wording."""
+    sf = (q.get("short_form") or "").strip()
+    if sf:
+        return sf
+    w = q.get("wording", "").strip().rstrip("?.,:;")
+    words = w.split()
+    return " ".join(words[:5])
+
+radial_display_labels = {}
+radial_hover_tooltips = {}
+# Food: merge willingness-to-reduce-meat/dairy spokes into one
+_FOOD_MERGE_IDS = {"diet_4", "diet_5", "diet_6", "diet_8"}
+_FOOD_MERGE_LABEL = "willingness - low-carbon diet"
+for _sec_lower, _sec_key in [("food","FOOD"),("transport","TRANSPORT"),("housing","HOUSING")]:
+    _qid_to_q = {}
+    for _frame in survey_meta[_sec_key].values():
+        for _q in _frame["questions"]:
+            _qid_to_q[_q["id"]] = _q
+    _triples = []  # (pct, label, tooltip)
+    _merge_pcts, _merge_qs = [], []
+    for _qid, _pct in zip(SURVEY_IDS[_sec_lower], radial_vals[_sec_lower]):
+        if _sec_lower == "food" and _qid in _FOOD_MERGE_IDS:
+            _merge_pcts.append(_pct)
+            _merge_qs.append(_qid_to_q.get(_qid, {}))
+            continue
+        _q = _qid_to_q.get(_qid, {})
+        _triples.append((_pct, _radial_label(_q), _q.get("wording", _qid).strip()))
+    if _merge_pcts:  # insert merged spoke
+        _merged_pct = round(sum(_merge_pcts) / len(_merge_pcts), 1)
+        _merged_tip = " · ".join(q.get("wording", "").strip().rstrip("?") for q in _merge_qs if q.get("wording"))
+        _triples.append((_merged_pct, _FOOD_MERGE_LABEL, _merged_tip))
+    _triples.sort(key=lambda x: x[0])  # ascending % — lowest to highest
+    radial_vals[_sec_lower]              = [t[0] for t in _triples]
+    radial_display_labels[_sec_lower]   = [t[1] for t in _triples]
+    radial_hover_tooltips[_sec_lower]   = [t[2] for t in _triples]
+
+radial_food_labels_js       = json.dumps(radial_display_labels["food"])
+radial_transport_labels_js  = json.dumps(radial_display_labels["transport"])
+radial_housing_labels_js    = json.dumps(radial_display_labels["housing"])
+radial_food_tips_js         = json.dumps(radial_hover_tooltips["food"])
+radial_transport_tips_js    = json.dumps(radial_hover_tooltips["transport"])
+radial_housing_tips_js      = json.dumps(radial_hover_tooltips["housing"])
+
+# Serialize
+gate_pct_js          = json.dumps(gate_pct)
+stance_counts_js     = json.dumps(stance_counts)
+sankey_data_js       = json.dumps(sankey_data)
+bubble_food_js       = json.dumps(bubble_counts.get("Food", []))
+bubble_transport_js  = json.dumps(bubble_counts.get("Transport", []))
+bubble_housing_js    = json.dumps(bubble_counts.get("Housing", []))
+sector_totals_js     = json.dumps(sector_totals)
+radial_food_vals_js      = json.dumps(radial_vals["food"])
+radial_transport_vals_js = json.dumps(radial_vals["transport"])
+radial_housing_vals_js   = json.dumps(radial_vals["housing"])
+
+# ═══════════════════════════════════════════════════════════════════
 # Build examples HTML from verification samples - 9-column layout
 # ═══════════════════════════════════════════════════════════════════
 import math as _math
@@ -147,7 +282,6 @@ norms_prompts = {q["id"]: q["prompt"] for q in norms_schema["norms_questions"]}
 
 NORMS_Q_LABELS = [
     ("1.1_gate", "Norm Signal (Gate)"),
-    ("1.1.1_stance", "Author Stance"),
     ("1.2.1_descriptive", "Descriptive Norm"),
     ("1.2.2_injunctive", "Injunctive Norm"),
     ("1.3.1_reference_group", "Reference Group"),
@@ -215,16 +349,28 @@ for task_type, qid, display_label, sector_filter in ALL_QS:
         seen_labels[lbl] = seen_labels.get(lbl, 0) + 1
     all_labels = sorted(seen_labels.keys())
 
-    # Group samples by (label, sector) -> up to 3
-    grouped = {}
+    # Group samples by (label, sector): 2 agree + 1 disagree examples
+    # Collect all, split by agreement, then pick 2 agree + 1 disagree (fallback to available)
+    _all_grouped = {}
     for s in samples:
         lbl = str(s.get("vllm_label", "")).strip()
         sec = str(s.get("sector", "")).strip().lower()
         key = (lbl, sec)
-        if key not in grouped:
-            grouped[key] = []
-        if len(grouped[key]) < 3:
-            grouped[key].append(s)
+        if key not in _all_grouped:
+            _all_grouped[key] = {"agree": [], "disagree": []}
+        is_agree = str(s.get("vllm_label","")).strip().lower() == str(s.get("reasoning_label","")).strip().lower()
+        bucket = "agree" if is_agree else "disagree"
+        _all_grouped[key][bucket].append(s)
+    grouped = {}
+    for key, buckets in _all_grouped.items():
+        agree2 = buckets["agree"][:2]
+        disagree1 = buckets["disagree"][:1]
+        # fallback: if not enough of one type, fill with the other
+        combined = agree2 + disagree1
+        if len(combined) < 3:
+            extra = [s for s in (buckets["agree"][2:] + buckets["disagree"][1:]) if s not in combined]
+            combined += extra[:3 - len(combined)]
+        grouped[key] = combined
 
     # Prompt text
     if task_type == "norms":
@@ -240,16 +386,19 @@ for task_type, qid, display_label, sector_filter in ALL_QS:
         f'</details>'
     )
 
-    # Column headers: FOOD 1/2/3, TRANSPORT 1/2/3, HOUSING 1/2/3
+    # Column headers: sector name once (span 3) + Ex 1/2/3 subheaders
+    sec_headers = ""
     col_headers = ""
     for sec in EX_SECTORS:
         color = EX_SEC_COLORS[sec]
         lbl_str = EX_SEC_LABELS[sec]
         if sector_filter and sector_filter != sec:
+            sec_headers += '<div class="ex-sec-hdr ex-col-na" style="grid-column:span 3">—</div>'
             col_headers += '<div class="ex-col-hdr ex-col-na">—</div>' * 3
         else:
+            sec_headers += f'<div class="ex-sec-hdr" style="color:{color};grid-column:span 3">{lbl_str}</div>'
             for ci in range(1, 4):
-                col_headers += f'<div class="ex-col-hdr" style="color:{color}">{lbl_str} {ci}</div>'
+                col_headers += f'<div class="ex-col-hdr" style="color:{color}">Ex {ci}</div>'
 
     # Answer rows
     # Label display map for this question (e.g. "0"→"none" for second_order)
@@ -306,6 +455,7 @@ for task_type, qid, display_label, sector_filter in ALL_QS:
         f'</span></summary>'
         f'<div class="ex-content">'
         f'{prompt_drop}'
+        f'<div class="ex-9grid ex-sec-hdr-row">{sec_headers}</div>'
         f'<div class="ex-9grid ex-hdr-row">{col_headers}</div>'
         f'{answer_rows_html}'
         f'</div></details>\n'
@@ -477,11 +627,12 @@ h1{text-align:center;font-size:1.3em;color:#fff;margin-bottom:2px;font-weight:30
 .info-btn:hover{background:#1a3050;color:#fff;border-color:#5ab4ac}
 .info-popup{display:none;position:absolute;top:40px;right:10px;background:#1a3050;border:1px solid #2a4060;border-radius:8px;padding:12px 14px;font-size:0.78em;color:#b0c4d8;line-height:1.5;max-width:350px;z-index:10;box-shadow:0 4px 20px rgba(0,0,0,0.5)}
 .info-popup.show{display:block}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.grid2>*,.grid3>*{min-width:0;overflow:hidden}
 .full{grid-column:1/-1}
 .gauge-clip{height:220px;overflow:hidden;position:relative}
-.bubble-chart{width:100%;height:300px}
+.bubble-chart{width:100%;height:260px}
 .bubble-chart svg{width:100%;height:100%}
 .bubble-label{fill:#fff;font-family:Inter,sans-serif;pointer-events:none;text-anchor:middle}
 .bubble-sector-label{fill:#6a8caf;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1px}
@@ -523,6 +674,8 @@ h1{text-align:center;font-size:1.3em;color:#fff;margin-bottom:2px;font-weight:30
 .ex-sector{font-size:0.75em;color:#4a6a8a;margin-left:auto}
 /* 9-col Examples grid */
 .ex-9grid{display:grid;grid-template-columns:repeat(9,1fr);gap:4px}
+.ex-sec-hdr-row{margin-bottom:0}
+.ex-sec-hdr{font-size:0.72em;font-weight:700;letter-spacing:1px;padding:4px 2px 2px;text-align:center;text-transform:uppercase;border-radius:3px 3px 0 0}
 .ex-hdr-row{margin-bottom:2px}
 .ex-col-hdr{font-size:0.6em;font-weight:700;letter-spacing:1px;padding:3px 2px;text-align:center;text-transform:uppercase;border-radius:3px 3px 0 0}
 .ex-col-na{color:#1a3050!important}
@@ -545,20 +698,19 @@ h1{text-align:center;font-size:1.3em;color:#fff;margin-bottom:2px;font-weight:30
 <p class="subtitle">Reddit analysis across Food, Transport &amp; Housing &mdash; 9,000 comments &mdash; LLM-labeled with verification</p>
 
 <div class="tabs">
-<button class="tab-btn active" onclick="showTab('norms')">Norms</button>
-<button class="tab-btn" onclick="showTab('author-stance')">Author Stance</button>
+<button class="tab-btn active" onclick="showTab('norms')">Social Norms</button>
 <span class="tab-sep"></span>
-<button class="tab-btn" onclick="showTab('survey')">Factors &amp; Barriers</button>
+<button class="tab-btn" onclick="showTab('survey')">Lifestyle Adoption Factors</button>
 <span class="tab-sep"></span>
 <button class="tab-btn" onclick="showTab('temporal')">Temporal</button>
 <span class="tab-sep"></span>
-<button class="tab-btn" onclick="showTab('verification')">Verification</button>
 <button class="tab-btn" onclick="showTab('examples')">Examples</button>
 </div>
 
 <!-- TAB 1: NORMS (presence + dimensions + reference groups) -->
 <div class="tab-content active" id="tab-norms">
-<div class="sec">
+<div style="display:flex;gap:16px;align-items:stretch">
+<div class="sec" style="flex:1;min-width:0">
 <div class="sec-header">
 <div class="sec-title">Does the comment reference a social norm?</div>
 <button class="info-btn" onclick="toggleInfo(this)">?</button>
@@ -566,45 +718,32 @@ h1{text-align:center;font-size:1.3em;color:#fff;margin-bottom:2px;font-weight:30
 <div class="info-popup">Gate question (1.1): Each comment is first classified as containing a social norm or not. A social norm is any reference to what people do (descriptive) or should do (injunctive) regarding climate actions. Food discussions contain norms most often (40%), while transport/housing are lower.</div>
 <div class="gauge-clip"><div id="gauge-chart"></div></div>
 <div style="text-align:center;margin-top:6px">
-<span style="color:#5ab4ac;font-size:0.85em">&#9679; Food 40.2%</span> &nbsp;
-<span style="color:#af8dc3;font-size:0.85em">&#9679; Transport 11.6%</span> &nbsp;
-<span style="color:#f4a460;font-size:0.85em">&#9679; Housing 16.2%</span>
+<span style="color:#5ab4ac;font-size:0.85em">&#9679; Food FOOD_GATE_PCT_VAL%</span> &nbsp;
+<span style="color:#af8dc3;font-size:0.85em">&#9679; Transport TRANSPORT_GATE_PCT_VAL%</span> &nbsp;
+<span style="color:#f4a460;font-size:0.85em">&#9679; Housing HOUSING_GATE_PCT_VAL%</span>
 </div>
 </div>
-<div class="sec" style="margin-top:16px">
+<div class="sec" style="flex:2;min-width:0">
 <div class="sec-header">
-<div class="sec-title">Norm Classification Flow</div>
-<button class="info-btn" onclick="toggleInfo(this)">?</button>
-</div>
-<div class="info-popup">Each comment is classified across 3 norm dimensions. Select a sector to trace its 3,000 comments through each dimension. <b>Descriptive</b>: what people do. <b>Injunctive</b>: what people should do. <b>Second-order</b>: beliefs about others' norms.</div>
-<div class="sankey-toggles">
-<button class="sankey-toggle active" data-sec="Food" onclick="window._sankeySetSector('Food')">Food</button>
-<button class="sankey-toggle" data-sec="Transport" onclick="window._sankeySetSector('Transport')">Transport</button>
-<button class="sankey-toggle" data-sec="Housing" onclick="window._sankeySetSector('Housing')">Housing</button>
-<button class="sankey-toggle" data-sec="all" onclick="window._sankeySetSector('all')">All Sectors</button>
-</div>
-<div id="sankey-norms"></div>
-</div>
-<div class="sec" style="margin-top:16px">
-<div class="sec-header">
-<div class="sec-title">Reference Groups Mentioned</div>
+<div class="sec-title">Social groups mentioned by Reddit users</div>
 <button class="info-btn" onclick="toggleInfo(this)">?</button>
 </div>
 <div class="info-popup">Which social groups does the speaker reference when discussing climate actions? Shows the count of mentions per reference group category across sectors. Size = frequency of mention.</div>
 <div id="bubble-pack" class="bubble-chart"></div>
+<div style="text-align:center;color:#6a8caf;font-size:0.72em;margin-top:4px">Count = comments mentioning that social group &nbsp;&middot;&nbsp; % = share of all cross-sector group mentions</div>
 <div class="legend" id="bubble-legend"></div>
 </div>
 </div>
-
-<!-- TAB 3: AUTHOR STANCE -->
-<div class="tab-content" id="tab-author-stance">
-<div class="sec">
+<div class="sec" style="margin-top:16px">
 <div class="sec-header">
-<div class="sec-title">Author Stance Toward Climate Action</div>
+<div class="sec-title">Descriptive or Injunctive Norm</div>
 <button class="info-btn" onclick="toggleInfo(this)">?</button>
 </div>
-<div class="info-popup">How does the comment author position themselves toward the climate action (veganism, EVs, solar)? Pro = supportive, Against = opposed, Against particular but pro = criticizes specifics but supports overall, Neither/Mixed = neutral or ambivalent, Pro but lack of options = wants to but faces barriers.</div>
-<div id="treemap-stance-main"></div>
+<div class="info-popup"><b>Descriptive norm</b>: references to what people do (observed behaviour). <b>Injunctive norm</b>: references to what people should do (social approval/disapproval). Area = comment count; colour intensity = Present (bright) / Absent (mid) / Unclear (faint).</div>
+<div class="grid2" style="margin-top:8px">
+<div><div style="text-align:center;color:#b0c4d8;font-size:0.82em;font-weight:600;margin-bottom:4px;letter-spacing:1px">DESCRIPTIVE NORM</div><div id="treemap-desc"></div></div>
+<div><div style="text-align:center;color:#b0c4d8;font-size:0.82em;font-weight:600;margin-bottom:4px;letter-spacing:1px">INJUNCTIVE NORM</div><div id="treemap-inj"></div></div>
+</div>
 </div>
 </div>
 
@@ -628,32 +767,16 @@ h1{text-align:center;font-size:1.3em;color:#fff;margin-bottom:2px;font-weight:30
 <div class="tab-content" id="tab-temporal">
 <div class="sec">
 <div class="sec-header">
-<div class="sec-title">Author Stance Over Time (% by year)</div>
-<button class="info-btn" onclick="toggleInfo(this)">?</button>
-</div>
-<div class="info-popup">Proportions of author stance categories per year within each sector. Shows how climate action support/opposition evolves from 2010-2024. Each column sums to 100%.</div>
-<div class="grid3">
-<div><div style="text-align:center;color:#5ab4ac;font-size:0.8em;font-weight:600;margin-bottom:2px">FOOD</div><div id="temporal-stance-food"></div></div>
-<div><div style="text-align:center;color:#af8dc3;font-size:0.8em;font-weight:600;margin-bottom:2px">TRANSPORT</div><div id="temporal-stance-transport"></div></div>
-<div><div style="text-align:center;color:#f4a460;font-size:0.8em;font-weight:600;margin-bottom:2px">HOUSING</div><div id="temporal-stance-housing"></div></div>
-</div>
-</div>
-<div class="sec" style="margin-top:16px">
-<div class="sec-header">
 <div class="sec-title">Norm Dimensions Over Time (% by year)</div>
 <button class="info-btn" onclick="toggleInfo(this)">?</button>
 </div>
-<div class="info-popup">How the distribution of norm classifications (descriptive, injunctive, second-order) changes across years. Each stacked area shows proportions within a single dimension.</div>
+<div class="info-popup">% of comments per year where the norm dimension is <b>present</b>. For Second-Order, strong+weak are merged. Each line is a sector.</div>
 <div class="temporal-dim-toggles" style="display:flex;gap:6px;margin-bottom:10px;justify-content:flex-start">
 <button class="sankey-toggle active" data-dim="1.2.1_descriptive" onclick="window._setTemporalDim(this.dataset.dim)">Descriptive</button>
 <button class="sankey-toggle" data-dim="1.2.2_injunctive" onclick="window._setTemporalDim(this.dataset.dim)">Injunctive</button>
 <button class="sankey-toggle" data-dim="1.3.3_second_order" onclick="window._setTemporalDim(this.dataset.dim)">Second-Order</button>
 </div>
-<div class="grid3">
-<div><div style="text-align:center;color:#5ab4ac;font-size:0.8em;font-weight:600;margin-bottom:2px">FOOD</div><div id="temporal-dim-food"></div></div>
-<div><div style="text-align:center;color:#af8dc3;font-size:0.8em;font-weight:600;margin-bottom:2px">TRANSPORT</div><div id="temporal-dim-transport"></div></div>
-<div><div style="text-align:center;color:#f4a460;font-size:0.8em;font-weight:600;margin-bottom:2px">HOUSING</div><div id="temporal-dim-housing"></div></div>
-</div>
+<div id="temporal-dim-combined"></div>
 </div>
 <div class="sec" style="margin-top:16px">
 <div class="sec-header">
@@ -669,29 +792,13 @@ h1{text-align:center;font-size:1.3em;color:#fff;margin-bottom:2px;font-weight:30
 </div>
 </div>
 
-<!-- TAB 5: VERIFICATION -->
-<div class="tab-content" id="tab-verification">
-<div class="sec" style="padding:10px 16px">
-<div class="sec-header"><div class="sec-title" style="font-size:0.85em">Model Verification: Fast (Mistral-7B) vs Reasoning (GPT-oss-20B)</div><button class="info-btn" onclick="toggleInfo(this)">?</button></div>
-<div class="info-popup">50 samples per question re-labeled with a slower reasoning model. Accuracy = agreement rate. Cohen's kappa accounts for chance agreement. Confidence = model's logprob-derived certainty.</div>
-</div>
-<div class="stat-grid">
-STAT_BOXES
-</div>
-<div class="grid2">
-<div class="sec"><div class="sec-title" style="font-size:0.85em;margin-bottom:8px">Accuracy by Question</div><div id="chart-acc"></div></div>
-<div class="sec"><div class="sec-title" style="font-size:0.85em;margin-bottom:8px">Top Estimation Errors</div><div id="chart-est"></div></div>
-<div class="sec"><div class="sec-title" style="font-size:0.85em;margin-bottom:8px">Confidence vs Mismatch</div><div id="chart-conf-box"></div><div id="chart-conf-scatter"></div></div>
-<div class="sec"><div class="sec-title" style="font-size:0.85em;margin-bottom:8px">Accuracy (Conf &gt; 0.9)</div><div id="chart-hc-acc"></div></div>
-</div>
-</div>
-
 <!-- TAB 6: EXAMPLES -->
 <div class="tab-content" id="tab-examples">
 <div style="margin-bottom:12px;color:#6a8caf;font-size:0.82em">
 All 36 questions (7 norm dimensions + 29 survey frames) &mdash; 3 examples per answer label per sector.
-<span style="color:#4ade80">&#9646;</span> Fast &amp; reasoning models agree &nbsp;&nbsp;
-<span style="color:#f87171">&#9646;</span> Models disagree &nbsp;&nbsp;
+Each cell shows <b style="color:#e0e0e0">2 cases where labeler &amp; verifier agree</b> and <b style="color:#e0e0e0">1 where they disagree</b>, so you can judge model reliability directly.
+&nbsp;&nbsp;<span style="color:#4ade80">&#9646;</span> Labeler &amp; verifier agree &nbsp;&nbsp;
+<span style="color:#f87171">&#9646;</span> Labeler &amp; verifier disagree &nbsp;&nbsp;
 Confidence % = logprob of fast model prediction.
 </div>
 EXAMPLES_PLACEHOLDER
@@ -716,16 +823,15 @@ function showTab(id) {
     if(id==='norms'){setTimeout(function(){if(window._animateGauge)window._animateGauge();},100);setTimeout(function(){if(window._animateNorms)window._animateNorms();},100);setTimeout(initBubbles,200);}
     if(id==='temporal') setTimeout(function(){if(window._animateTemporal)window._animateTemporal();},200);
     if(id==='survey') setTimeout(function(){if(window._animateSurvey)window._animateSurvey();},200);
-    if(id==='verification') setTimeout(function(){if(window._animateVerification)window._animateVerification();},200);
 }
 function toggleInfo(btn){var p=btn.parentElement.nextElementSibling;if(p&&p.classList.contains('info-popup'))p.classList.toggle('show');}
 var PC={displayModeBar:false,responsive:true};
 var DB='rgba(0,0,0,0)';
-var DL={paper_bgcolor:DB,plot_bgcolor:DB,font:{color:'#b0c4d8',family:'Inter,sans-serif',size:10}};
+var DL={paper_bgcolor:DB,plot_bgcolor:DB,font:{color:'#ffffff',family:'Inter,sans-serif',size:10},legend:{font:{size:14,color:'#ffffff'},orientation:'h',x:0.5,xanchor:'center',y:-0.22,yanchor:'top'}};
 
 // ═══════════════ GAUGE (animated from 0, replayable) ═══════════════
 (function(){
-    var f=40.2,t=11.6,h=16.2,avg=(f+t+h)/3,vis=f+t+h;
+    var _gp=GATE_PCT_DATA;var f=_gp.food,t=_gp.transport,h=_gp.housing,avg=(f+t+h)/3,vis=f+t+h;
     Plotly.newPlot('gauge-chart',[{
         values:[0.01,0.01,0.01,0.03],labels:['Food','Transport','Housing',''],
         marker:{colors:['#5ab4ac','#af8dc3','#f4a460','rgba(0,0,0,0)'],line:{color:'#12203a',width:4}},
@@ -755,62 +861,26 @@ var DL={paper_bgcolor:DB,plot_bgcolor:DB,font:{color:'#b0c4d8',family:'Inter,san
     window._animateGauge();
 })();
 
-// ═══════════════ TREEMAP - AUTHOR STANCE ═══════════════
-(function(){
-    // Stance colors: green(pro) -> muted green -> neutral -> orange -> red(against)
-    var sc={pro:'#8fcc8f',plo:'#7bb8a0',mix:'#b8b8a0',abp:'#e0a878',agt:'#ff9aa8'};
-    // Sector parent backgrounds (dark muted)
-    var sp={Food:'#1a3a4a',Transport:'#2a1a3a',Housing:'#3a2a1a'};
-    // Data: author stance per sector (from dashboard, 3000/sector)
-    var d={Food:{pro:735,against:252,abp:83,'neither/mixed':1404,plo:526},
-           Transport:{pro:372,against:274,abp:66,'neither/mixed':1754,plo:534},
-           Housing:{pro:531,against:243,abp:69,'neither/mixed':1555,plo:602}};
-    var labels=['All','Food','Transport','Housing'];
-    var parents=['','All','All','All'];
-    var values=[0,0,0,0];
-    var colors=['#0f1d33',sp.Food,sp.Transport,sp.Housing];
-    var texts=['','','',''];
-    var tcolors=['#fff','#fff','#fff','#fff']; // text colors per node
-    var stances=[['pro','Pro',sc.pro],['plo','Pro but lack of options',sc.plo],['neither/mixed','Neither/Mixed',sc.mix],['abp','Against particular but pro',sc.abp],['against','Against',sc.agt]];
-    ['Food','Transport','Housing'].forEach(function(sec){
-        var total=0;for(var k in d[sec])total+=d[sec][k];
-        stances.forEach(function(st){
-            var v=d[sec][st[0]];
-            var pct=Math.round(v/total*100);
-            labels.push(sec+': '+st[1]);
-            parents.push(sec);
-            values.push(v);
-            colors.push(st[2]);
-            texts.push('<b>'+v+'</b><br>'+pct+'%');
-            tcolors.push('#0a1628'); // dark text on light backgrounds
-        });
-    });
-    Plotly.newPlot('treemap-stance-main',[{
-        type:'treemap',branchvalues:'remainder',
-        labels:labels,parents:parents,values:values,
-        text:texts,textinfo:'label+text',
-        marker:{colors:colors,line:{color:'#0a1628',width:3}},
-        textfont:{color:tcolors,size:12},pathbar:{visible:false},
-    }],Object.assign({},DL,{height:420,margin:{t:5,b:5,l:5,r:5}}),PC);
-})();
-
 // ═══════════════ BUBBLES ═══════════════
 var bubbleData={
     categories:['family','partner/spouse','friends','coworkers','neighbors','local community','political tribe','online community','other reddit user'],
     colors:['#a8b8c2','#c49fc4','#8fbfd9','#c692c6','#7cadc6','#7cc2b8','#a8b1b8','#b8b8b8','#ffa8c2'],
-    Food:[140,60,290,112,13,108,1,24,89],Transport:[36,6,26,335,24,65,5,8,97],Housing:[28,3,26,334,39,104,3,16,98]
+    Food:BUBBLE_FOOD_DATA,Transport:BUBBLE_TRANSPORT_DATA,Housing:BUBBLE_HOUSING_DATA
 };
 function initBubbles(){
     var el=document.getElementById('bubble-pack');if(!el)return;el.innerHTML='';
-    var w=el.clientWidth||900,h=320;
+    var w=el.clientWidth||900,h=el.clientHeight||260;
     var svg=d3.select('#bubble-pack').append('svg').attr('viewBox','0 0 '+w+' '+h);
     var sectors=['Food','Transport','Housing'],cw=w/3,nodes=[];
+    var grandTotal=0;
+    sectors.forEach(function(sec){bubbleData[sec].forEach(function(v){grandTotal+=v;});});
     sectors.forEach(function(sec,si){
         var cx=cw*si+cw/2;
         svg.append('text').attr('x',cx).attr('y',18).attr('class','bubble-sector-label').attr('text-anchor','middle').text(sec.toUpperCase());
         bubbleData.categories.forEach(function(cat,ci){
             var val=bubbleData[sec][ci];if(val===0)return;
-            nodes.push({category:cat,value:val,r:Math.sqrt(val)*2.2,color:bubbleData.colors[ci],cx:cx,cy:h/2+5,x:cx+(Math.random()-0.5)*60,y:h/2+5+(Math.random()-0.5)*60});
+            var pct=grandTotal>0?(val/grandTotal*100).toFixed(1):0;
+            nodes.push({category:cat,value:val,pct:pct,r:Math.sqrt(val)*1.5,color:bubbleData.colors[ci],cx:cx,cy:h/2+5,x:cx+(Math.random()-0.5)*40,y:h/2+5+(Math.random()-0.5)*40});
         });
     });
     svg.selectAll('.sep').data([1,2]).enter().append('line')
@@ -820,119 +890,75 @@ function initBubbles(){
     g.append('circle').attr('cx',function(d){return d.x}).attr('cy',function(d){return d.y}).attr('r',0)
         .attr('fill',function(d){return d.color}).attr('fill-opacity',0.85).attr('stroke',function(d){return d.color}).attr('stroke-opacity',0.3).attr('stroke-width',2)
         .transition().duration(800).delay(function(d,i){return i*30}).attr('r',function(d){return d.r});
-    g.append('text').attr('x',function(d){return d.x}).attr('y',function(d){return d.y-2}).attr('class','bubble-label')
+    g.append('text').attr('x',function(d){return d.x}).attr('y',function(d){return d.y+(d.r>25?-12:d.r>15?-6:-2)}).attr('class','bubble-label')
         .attr('font-size',function(d){return Math.max(8,Math.min(d.r*0.6,13))+'px'}).attr('opacity',0)
         .text(function(d){return d.value>=8?d.category:''}).transition().duration(600).delay(function(d,i){return 800+i*30}).attr('opacity',1);
-    g.append('text').attr('x',function(d){return d.x}).attr('y',function(d){return d.y+(d.r>20?12:8)}).attr('class','bubble-label')
+    g.append('text').attr('x',function(d){return d.x}).attr('y',function(d){return d.y+(d.r>25?4:d.r>15?7:10)}).attr('class','bubble-label')
         .attr('font-size',function(d){return Math.max(9,Math.min(d.r*0.55,14))+'px'}).attr('font-weight','700').attr('opacity',0)
         .text(function(d){return d.value}).transition().duration(600).delay(function(d,i){return 800+i*30}).attr('opacity',1);
+    g.append('text').attr('x',function(d){return d.x}).attr('y',function(d){return d.y+(d.r>25?17:d.r>15?19:22)}).attr('class','bubble-label')
+        .attr('font-size',function(d){return Math.max(7,Math.min(d.r*0.42,11))+'px'}).attr('opacity',0)
+        .text(function(d){return d.r>=12?'('+d.pct+'%)':''}).transition().duration(600).delay(function(d,i){return 800+i*30}).attr('opacity',1);
     d3.forceSimulation(nodes).force('x',d3.forceX(function(d){return d.cx}).strength(0.1))
         .force('y',d3.forceY(h/2+10).strength(0.08)).force('collide',d3.forceCollide(function(d){return d.r+2}).strength(0.95))
         .force('charge',d3.forceManyBody().strength(-1)).alpha(0.8)
         .on('tick',function(){
             g.select('circle').attr('cx',function(d){return d.x}).attr('cy',function(d){return d.y});
             g.selectAll('text').attr('x',function(d){return d.x});
-            g.select('text:nth-child(2)').attr('y',function(d){return d.y-2});
-            g.select('text:nth-child(3)').attr('y',function(d){return d.y+(d.r>20?12:8)});
+            g.select('text:nth-child(2)').attr('y',function(d){return d.y+(d.r>25?-12:d.r>15?-6:-2)});
+            g.select('text:nth-child(3)').attr('y',function(d){return d.y+(d.r>25?4:d.r>15?7:10)});
+            g.select('text:nth-child(4)').attr('y',function(d){return d.y+(d.r>25?17:d.r>15?19:22)});
         });
     var le=document.getElementById('bubble-legend');le.innerHTML='';
     bubbleData.categories.forEach(function(c,i){le.innerHTML+='<span class="legend-item"><span class="legend-dot" style="background:'+bubbleData.colors[i]+'"></span>'+c+'</span>';});
 }
 
-// ═══════════════ NORMS SANKEY (sectors → dimensions → categories, per-sector links) ═══════════════
+// ═══════════════ NORM TREEMAPS (descriptive + injunctive) ═══════════════
 (function(){
-    // Per-sector data: [present/strong, absent/weak, unclear/none]
-    var SD={
-        Food:     {desc:[874,743,1383],  inj:[288,2526,186],  sec:[377,628,1995]},
-        Transport:{desc:[419,2176,405],  inj:[150,2805,45],   sec:[319,480,2201]},
-        Housing:  {desc:[395,1957,648],  inj:[206,2735,59],   sec:[362,522,2116]}
-    };
-    var secs=['Food','Transport','Housing'],dims=['desc','inj','sec'];
-    // 15 nodes: 0-2 sectors, 3-5 dimensions, 6-14 categories
-    var baseLabels=['Food<br>3,000','Transport<br>3,000','Housing<br>3,000',
-        'Descriptive<br>Norm','Injunctive<br>Norm','Second-Order<br>Belief'];
-    var catNames=[['Present','Absent','Unclear'],['Present','Absent','Unclear'],
-        ['Strong','Weak','None']];
-    // Aggregate category totals
-    var catTotals=[];
-    dims.forEach(function(d,di){
-        [0,1,2].forEach(function(ci){
-            var t=0;secs.forEach(function(s){t+=SD[s][d][ci]});
-            catTotals.push({name:catNames[di][ci],total:t});
-        });
-    });
-    var catLabelsAll=catTotals.map(function(c){return c.name+'<br>'+c.total.toLocaleString()});
-    // Per-sector category labels
-    var catLabelsSec={};
-    secs.forEach(function(s){
-        catLabelsSec[s]=[];
-        dims.forEach(function(d,di){
-            [0,1,2].forEach(function(ci){
-                catLabelsSec[s].push(catNames[di][ci]+'<br>'+SD[s][d][ci].toLocaleString());
+    var SD=SANKEY_SD_DATA;
+    var secs=['Food','Transport','Housing'];
+    var SC={Food:'90,180,172',Transport:'175,141,195',Housing:'244,164,96'};
+    var catNames=['Present','Absent','Unclear'];
+    var catAlphas=[0.88,0.45,0.18];
+
+    function makeNormTreemap(divId,dimKey){
+        var labels=[],parents=[],values=[],colors=[],texts=[];
+        secs.forEach(function(sec){
+            var d=SD[sec][dimKey];
+            var total=d[0]+d[1]+d[2];
+            labels.push(sec);parents.push('');values.push(0);
+            colors.push('rgba('+SC[sec]+',0.08)');
+            texts.push('<b>'+sec+'</b>');
+            catNames.forEach(function(cat,ci){
+                var v=d[ci];
+                var pct=total>0?Math.round(v/total*100):0;
+                labels.push(sec+'_'+cat);parents.push(sec);values.push(v);
+                colors.push('rgba('+SC[sec]+','+catAlphas[ci]+')');
+                texts.push(cat+'<br>'+v.toLocaleString()+'<br>('+pct+'%)');
             });
         });
-    });
-    var nl=baseLabels.concat(catLabelsAll);
-    var nc=['#5ab4ac','#af8dc3','#f4a460',
-        '#7caed6','#8fbfd9','#b8a8c8',
-        '#7caed6','#566a7a','#8a9aa8',
-        '#8fbfd9','#566a7a','#8a9aa8',
-        '#ffb0a0','#8fbfd9','#8a9aa8'];
-    // Build links: 48 total, organized by sector (0-15 Food, 16-31 Transport, 32-47 Housing)
-    var src=[],tgt=[],val=[];
-    secs.forEach(function(s,si){
-        // 4 sector→dimension links
-        dims.forEach(function(d,di){src.push(si);tgt.push(3+di);val.push(3000);});
-        // 12 dimension→category links (per sector)
-        dims.forEach(function(d,di){
-            SD[s][d].forEach(function(v,ci){src.push(3+di);tgt.push(6+di*3+ci);val.push(v);});
-        });
-    });
-    // Color helpers
-    var SC={Food:'90,180,172',Transport:'175,141,195',Housing:'244,164,96'};
-    function getLinkColors(active){
-        var c=[];
-        secs.forEach(function(s){
-            var bright='rgba('+SC[s]+',0.45)',dim='rgba('+SC[s]+',0.06)';
-            var use=(active==='all'||active===s)?bright:dim;
-            for(var i=0;i<12;i++)c.push(use);
-        });
-        return c;
+        Plotly.newPlot(divId,[{
+            type:'treemap',labels:labels,parents:parents,values:values,
+            text:texts,textinfo:'text',branchvalues:'remainder',
+            marker:{colors:colors,line:{width:1.5,color:'#0f1d33'}},
+            textfont:{size:12,color:'#ffffff'},
+            hovertemplate:'%{text}<extra></extra>',
+            tiling:{packing:'squarify',pad:3},
+        }],Object.assign({},DL,{height:340,margin:{t:5,b:5,l:5,r:5},uniformtext:{minsize:9,mode:'hide'}}),PC);
     }
-    // Default: Food highlighted
-    Plotly.newPlot('sankey-norms',[{type:'sankey',orientation:'h',
-        node:{label:nl,color:nc,pad:20,thickness:30,line:{color:'#0a1628',width:1}},
-        link:{source:src,target:tgt,value:val,color:getLinkColors('Food')}
-    }],Object.assign({},DL,{height:480,margin:{t:10,b:10,l:10,r:10}}),PC);
-    // Toggle sector
-    window._sankeySetSector=function(sec){
-        var newColors=getLinkColors(sec);
-        var newLabels;
-        if(sec==='all'){
-            newLabels=baseLabels.concat(catLabelsAll);
-        }else{
-            // Update dimension labels to show per-sector total
-            var dimLabels=['Descriptive<br>Norm','Injunctive<br>Norm','Second-Order<br>Belief'];
-            var secLabel=[sec+'<br>3,000'];
-            var otherSecs=secs.filter(function(s){return s!==sec});
-            var sLabels=secs.map(function(s){return s=== sec?(s+'<br>3,000'):(s+'<br><span style="opacity:0.3">3,000</span>');});
-            newLabels=sLabels.concat(dimLabels).concat(catLabelsSec[sec]);
-        }
-        Plotly.restyle('sankey-norms',{'link.color':[newColors],'node.label':[newLabels]},0);
-        document.querySelectorAll('.sankey-toggle').forEach(function(b){
-            b.classList.toggle('active',b.dataset.sec===sec);
-        });
+
+    makeNormTreemap('treemap-desc','desc');
+    makeNormTreemap('treemap-inj','inj');
+    window._animateNorms=function(){
+        makeNormTreemap('treemap-desc','desc');
+        makeNormTreemap('treemap-inj','inj');
     };
 })();
-window._animateNorms=function(){
-    // Re-trigger default sector selection
-    if(window._sankeySetSector) window._sankeySetSector('Food');
-};
 
 // ═══════════════ SURVEY RADIALS (D3 sequential spoke animation) ═══════════════
 // D3.arc: 0 = 12 o'clock, angles go clockwise
 // To place labels with Math.cos/sin, convert: trigAngle = d3Angle - PI/2
-function drawRadial(svgId, labels, values, baseColor, maxR, delay){
+function drawRadial(svgId, labels, tooltips, values, baseColor, maxR, delay){
     var svg=d3.select('#'+svgId);
     var cx=230,cy=210,outerR=130;
     var n=labels.length, sliceAngle=2*Math.PI/n;
@@ -940,15 +966,39 @@ function drawRadial(svgId, labels, values, baseColor, maxR, delay){
     var spokeAngle=sliceAngle*(1-gapFrac);
     var bc=baseColor;
     var arc=d3.arc();
+    // Shared floating tooltip (created once for all radial charts)
+    var _rtip=document.getElementById('_radial_tip');
+    if(!_rtip){
+        _rtip=document.createElement('div');
+        _rtip.id='_radial_tip';
+        _rtip.style.cssText='position:fixed;background:#1a3050;border:1px solid #3a6080;border-radius:7px;padding:10px 14px;font-size:0.8em;color:#b0c4d8;line-height:1.55;max-width:300px;pointer-events:none;z-index:9999;display:none;box-shadow:0 4px 20px rgba(0,0,0,0.7)';
+        document.body.appendChild(_rtip);
+    }
+    function _showRTip(tip,pct){
+        _rtip.innerHTML='<div style="color:#fff;font-weight:600;margin-bottom:5px">'+pct.toFixed(1)+'% of comments</div><div style="color:#8ab8d8;font-size:0.95em">'+tip+'</div>';
+        _rtip.style.display='block';
+    }
+    function _moveRTip(e){_rtip.style.left=(e.clientX+16)+'px';_rtip.style.top=(e.clientY-8)+'px';}
+    function _hideRTip(){_rtip.style.display='none';}
     // Grid circles
     [0.25,0.5,0.75,1.0].forEach(function(s){
         svg.append('circle').attr('cx',cx).attr('cy',cy).attr('r',outerR*s)
             .attr('fill','none').attr('stroke','#1a2a40').attr('stroke-width',0.5);
     });
+    // Faint radial guide lines at each spoke center angle
+    values.forEach(function(v,i){
+        var centerD3=i*sliceAngle;
+        var trigMid=centerD3-Math.PI/2;
+        svg.append('line')
+            .attr('x1',cx).attr('y1',cy)
+            .attr('x2',cx+Math.cos(trigMid)*outerR)
+            .attr('y2',cy+Math.sin(trigMid)*outerR)
+            .attr('stroke','#1a2a40').attr('stroke-width',0.5);
+    });
     // Grid tick labels (at top)
     [0.25,0.5,0.75,1.0].forEach(function(s){
         svg.append('text').attr('x',cx+3).attr('y',cy-outerR*s-1)
-            .attr('fill','#3a5a7a').attr('font-size','8px').attr('font-family','Inter,sans-serif')
+            .attr('fill','#ffffff').attr('font-size','9px').attr('font-family','Inter,sans-serif')
             .text((maxR*s).toFixed(0)+'%');
     });
     // Build spoke data - all angles in D3 convention (0=top, clockwise)
@@ -969,23 +1019,44 @@ function drawRadial(svgId, labels, values, baseColor, maxR, delay){
             .attr('fill',bc).attr('fill-opacity',alpha)
             .attr('stroke',bc).attr('stroke-opacity',0.6).attr('stroke-width',1)
             .attr('opacity',0);
-        // Tooltip on hover
-        g.append('title').text(labels[i]+': '+v.toFixed(1)+'%');
-        // Hover highlight
-        g.on('mouseover',function(){d3.select(this).select('path').attr('stroke','#fff').attr('stroke-width',2).attr('stroke-opacity',1);})
-         .on('mouseout',function(){d3.select(this).select('path').attr('stroke',bc).attr('stroke-width',1).attr('stroke-opacity',0.6);});
+        // Hover highlight + custom tooltip
+        g.on('mouseover',function(event){
+            d3.select(this).select('path').attr('stroke','#fff').attr('stroke-width',2).attr('stroke-opacity',1);
+            _showRTip(tooltips[i]||labels[i],v);_moveRTip(event);
+        })
+        .on('mousemove',function(event){_moveRTip(event);})
+        .on('mouseout',function(){
+            d3.select(this).select('path').attr('stroke',bc).attr('stroke-width',1).attr('stroke-opacity',0.6);
+            _hideRTip();
+        });
         spokes.push({g:g,path:path,label:labels[i],value:v,startD3:startD3,endD3:endD3,r:r,trigMid:trigMid,alpha:alpha});
     });
-    // Labels at spoke centers
+    // Labels at spoke centers — word-wrapped to avoid horizontal clipping
+    var MAX_LINE_CH=16;
     spokes.forEach(function(s,i){
-        var lx=cx+Math.cos(s.trigMid)*(outerR+16);
-        var ly=cy+Math.sin(s.trigMid)*(outerR+16);
+        var lx=cx+Math.cos(s.trigMid)*(outerR+20);
+        var ly=cy+Math.sin(s.trigMid)*(outerR+20);
         var anchor=Math.abs(Math.cos(s.trigMid))<0.15?'middle':(Math.cos(s.trigMid)>0?'start':'end');
-        svg.append('text').attr('x',lx).attr('y',ly+4)
-            .attr('text-anchor',anchor).attr('fill','#6a8caf')
+        var words=s.label.split(' ');
+        var lines=[],cur='';
+        words.forEach(function(w){
+            if(cur&&(cur+' '+w).length>MAX_LINE_CH){lines.push(cur);cur=w;}
+            else{cur=cur?cur+' '+w:w;}
+        });
+        if(cur)lines.push(cur);
+        var lh=11; // px between lines
+        var startY=ly-(lines.length-1)*lh/2;
+        var textEl=svg.append('text').attr('x',lx).attr('y',startY)
+            .attr('text-anchor',anchor).attr('fill','#ffffff')
             .attr('font-size','9px').attr('font-family','Inter,sans-serif')
-            .attr('opacity',0).attr('class','rl-'+svgId+'-'+i)
-            .text(s.label);
+            .attr('opacity',0).attr('class','rl-'+svgId+'-'+i);
+        lines.forEach(function(line,li){
+            textEl.append('tspan').attr('x',lx).attr('dy',li===0?0:lh).text(line);
+        });
+        textEl.style('cursor','help')
+            .on('mouseover',function(event){_showRTip(tooltips[i]||labels[i],s.value);_moveRTip(event);})
+            .on('mousemove',function(event){_moveRTip(event);})
+            .on('mouseout',_hideRTip);
     });
     // Sequential animation
     window['_animRadial_'+svgId]=function(){
@@ -998,8 +1069,8 @@ function drawRadial(svgId, labels, values, baseColor, maxR, delay){
                         return arc({innerRadius:0,outerRadius:s.r*t,startAngle:s.startD3,endAngle:s.endD3});
                     };
                 });
-            // Value label - pushed toward outer edge of spoke, skip tiny ones
-            var labelR=Math.max(s.r*0.72, 18);
+            // Value label — placed near spoke tip, min 42% of outerR to avoid centre crowding
+            var labelR=Math.max(s.r*0.92, outerR*0.42);
             var vx=cx+Math.cos(s.trigMid)*labelR;
             var vy=cy+Math.sin(s.trigMid)*labelR+3;
             var showLabel=s.value>=2.5 && s.r>15;
@@ -1015,184 +1086,65 @@ function drawRadial(svgId, labels, values, baseColor, maxR, delay){
         });
     };
 }
-drawRadial('radial-food',
-    ['health','convenience','cost','social prompting','barriers','identity','animal welfare','climate','alt. meat','reduce red meat','dairy alt.','lab-grown','taste'],
-    [5.2,9.6,2.8,12.2,5.2,4.4,20.0,6.0,6.2,3.8,4.0,0.0,9.6],'#5ab4ac',25,0);
-drawRadial('radial-transport',
-    ['environment','purchase cost','operating cost','infrastructure','driving exp.','reliability'],
-    [3.0,7.8,4.8,4.4,6.8,7.4],'#af8dc3',10,0);
-drawRadial('radial-housing',
-    ['cost savings','confidence','env. benefit','obsolescence','payback','climate','installer trust','support info','maintenance','performance'],
-    [11.6,8.8,14.0,4.6,7.0,1.8,5.0,1.0,0.6,6.6],'#f4a460',15,0);
+drawRadial('radial-food',RADIAL_FOOD_LABELS,RADIAL_FOOD_TOOLTIPS,RADIAL_FOOD_VALS,'#5ab4ac',RADIAL_FOOD_MAX,0);
+drawRadial('radial-transport',RADIAL_TRANSPORT_LABELS,RADIAL_TRANSPORT_TOOLTIPS,RADIAL_TRANSPORT_VALS,'#af8dc3',RADIAL_TRANSPORT_MAX,0);
+drawRadial('radial-housing',RADIAL_HOUSING_LABELS,RADIAL_HOUSING_TOOLTIPS,RADIAL_HOUSING_VALS,'#f4a460',RADIAL_HOUSING_MAX,0);
 window._animateSurvey=function(){
     // Reset and replay - clear dynamic elements, redraw
     ['radial-food','radial-transport','radial-housing'].forEach(function(id){
         var svg=document.getElementById(id);
         svg.innerHTML='';
     });
-    drawRadial('radial-food',
-        ['health','convenience','cost','social prompting','barriers','identity','animal welfare','climate','alt. meat','reduce red meat','dairy alt.','lab-grown','taste'],
-        [5.2,9.6,2.8,12.2,5.2,4.4,20.0,6.0,6.2,3.8,4.0,0.0,9.6],'#5ab4ac',25,0);
-    drawRadial('radial-transport',
-        ['environment','purchase cost','operating cost','infrastructure','driving exp.','reliability'],
-        [3.0,7.8,4.8,4.4,6.8,7.4],'#af8dc3',10,0);
-    drawRadial('radial-housing',
-        ['cost savings','confidence','env. benefit','obsolescence','payback','climate','installer trust','support info','maintenance','performance'],
-        [11.6,8.8,14.0,4.6,7.0,1.8,5.0,1.0,0.6,6.6],'#f4a460',15,0);
+    drawRadial('radial-food',RADIAL_FOOD_LABELS,RADIAL_FOOD_TOOLTIPS,RADIAL_FOOD_VALS,'#5ab4ac',RADIAL_FOOD_MAX,0);
+    drawRadial('radial-transport',RADIAL_TRANSPORT_LABELS,RADIAL_TRANSPORT_TOOLTIPS,RADIAL_TRANSPORT_VALS,'#af8dc3',RADIAL_TRANSPORT_MAX,0);
+    drawRadial('radial-housing',RADIAL_HOUSING_LABELS,RADIAL_HOUSING_TOOLTIPS,RADIAL_HOUSING_VALS,'#f4a460',RADIAL_HOUSING_MAX,0);
     window['_animRadial_radial-food']();
     window['_animRadial_radial-transport']();
     window['_animRadial_radial-housing']();
 };
 
-// ═══════════════ VERIFICATION CHARTS (animated) ═══════════════
-// Accuracy by question - start at 0
-Plotly.newPlot('chart-acc',[{
-    y:ACC_QUESTIONS, x:ACC_VALUES.map(function(){return 0}), type:'bar', orientation:'h',
-    marker:{color:ACC_COLORS,line:{width:0}},
-    text:ACC_VALUES.map(function(){return ''}),
-    textposition:'outside',textfont:{size:8,color:'#b0c4d8'},
-    hovertemplate:'%{y}<br>Accuracy: %{x:.1%}<extra></extra>'
-}],Object.assign({},DL,{
-    height:500,margin:{l:200,t:5,b:30,r:40},
-    xaxis:{range:[0,1.08],tickformat:'.0%',gridcolor:'#1a2a40',tickfont:{size:8,color:'#4a6a8a'}},
-    yaxis:{tickfont:{size:8,color:'#b0c4d8'}},showlegend:false
-}),PC);
-
-// Estimation errors - start at 0
-Plotly.newPlot('chart-est',[{
-    y:EST_LABELS, x:EST_VALUES.map(function(){return 0}), type:'bar', orientation:'h',
-    marker:{color:EST_COLORS,line:{width:0}},
-    text:EST_VALUES.map(function(){return ''}),
-    textposition:'outside',textfont:{size:7,color:'#b0c4d8'},showlegend:false,
-    hovertemplate:'%{y}<br>Error: %{x:+.1f}pp<extra></extra>'
-}],Object.assign({},DL,{
-    height:500,margin:{l:180,t:20,b:30,r:40},
-    xaxis:{gridcolor:'#1a2a40',zeroline:true,zerolinecolor:'#4a6a8a',zerolinewidth:1.5,tickfont:{size:8,color:'#4a6a8a'}},
-    yaxis:{tickfont:{size:7,color:'#b0c4d8'}},showlegend:false,
-    annotations:[
-        {x:-25,y:1.02,xref:'x',yref:'paper',text:'\u2190 Underestimation',showarrow:false,font:{size:9,color:'#5ab4ac'}},
-        {x:25,y:1.02,xref:'x',yref:'paper',text:'Overestimation \u2192',showarrow:false,font:{size:9,color:'#c06070'}}
-    ]
-}),PC);
-// Confidence vs Mismatch - box plot
-Plotly.newPlot('chart-conf-box',[{
-    x:CONF_BIN_LABELS, y:CONF_BIN_MISMATCH.map(function(){return 0}), type:'bar',
-    marker:{color:['#8fcc8f','#ffb87a','#ff9aa8','#ffb87a','#8fcc8f'],line:{width:0}},
-    text:CONF_BIN_MISMATCH.map(function(){return ''}),textposition:'outside',textfont:{size:9,color:'#b0c4d8'},
-    hovertemplate:'Confidence: %{x}<br>Mismatch: %{y:.1f}%<extra></extra>'
-}],Object.assign({},DL,{
-    height:220,margin:{l:50,t:5,b:35,r:15},
-    xaxis:{title:{text:'Confidence',font:{size:9,color:'#6a8caf'}},tickfont:{size:8,color:'#6a8caf'}},
-    yaxis:{title:{text:'Mismatch (%)',font:{size:9,color:'#6a8caf'}},tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40',range:[0,50]},
-    showlegend:false
-}),PC);
-
-// Confidence vs Mismatch - scatter
-Plotly.newPlot('chart-conf-scatter',[{
-    x:SCATTER_X.map(function(){return 0.5}), y:SCATTER_Y.map(function(){return 0}),
-    text:SCATTER_LABELS, mode:'markers',type:'scatter',
-    marker:{color:'#5ab4ac',size:8,opacity:0.7,line:{color:'#0a1628',width:1}},
-    hovertemplate:'<b>%{text}</b><br>Avg Conf: %{x:.3f}<br>Mismatch: %{y:.1f}%<extra></extra>'
-}],Object.assign({},DL,{
-    height:220,margin:{l:50,t:5,b:35,r:15},
-    xaxis:{title:{text:'Avg Confidence',font:{size:9,color:'#6a8caf'}},tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40',range:[0.5,1]},
-    yaxis:{title:{text:'Mismatch (%)',font:{size:9,color:'#6a8caf'}},tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40'},
-    showlegend:false
-}),PC);
-
-// High-conf accuracy bar chart
-Plotly.newPlot('chart-hc-acc',[{
-    y:HC_QUESTIONS, x:HC_VALUES.map(function(){return 0}), type:'bar', orientation:'h',
-    marker:{color:HC_COLORS,line:{width:0}},
-    text:HC_VALUES.map(function(){return ''}),
-    textposition:'outside',textfont:{size:7,color:'#b0c4d8'},
-    hovertemplate:'%{y}<br>Accuracy (Conf>0.9): %{x:.1%}<extra></extra>'
-}],Object.assign({},DL,{
-    height:500,margin:{l:200,t:5,b:30,r:40},
-    xaxis:{range:[0,1.08],tickformat:'.0%',gridcolor:'#1a2a40',tickfont:{size:8,color:'#4a6a8a'}},
-    yaxis:{tickfont:{size:7,color:'#b0c4d8'}},showlegend:false
-}),PC);
-
-// Animate verification charts when tab shown - replays every time
-window._animateVerification=function(){
-    // Reset to 0 first
-    Plotly.restyle('chart-acc',{x:[ACC_VALUES.map(function(){return 0})],text:[ACC_VALUES.map(function(){return ''})]},0);
-    Plotly.restyle('chart-est',{x:[EST_VALUES.map(function(){return 0})],text:[EST_VALUES.map(function(){return ''})]},0);
-    Plotly.restyle('chart-conf-box',{y:[CONF_BIN_MISMATCH.map(function(){return 0})],text:[CONF_BIN_MISMATCH.map(function(){return ''})]},0);
-    Plotly.restyle('chart-conf-scatter',{x:[SCATTER_X.map(function(){return 0.5})],y:[SCATTER_Y.map(function(){return 0})]},0);
-    Plotly.restyle('chart-hc-acc',{x:[HC_VALUES.map(function(){return 0})],text:[HC_VALUES.map(function(){return ''})]},0);
-    setTimeout(function(){
-        Plotly.animate('chart-acc',{data:[{x:ACC_VALUES,text:ACC_VALUES.map(function(v){return (v*100).toFixed(0)+'%'})}]},{
-            transition:{duration:900,easing:'cubic-out'},frame:{duration:900}});
-        Plotly.animate('chart-est',{data:[{x:EST_VALUES,text:EST_VALUES.map(function(v){return (v>0?'+':'')+v+'pp'})}]},{
-            transition:{duration:900,easing:'cubic-out'},frame:{duration:900}});
-        Plotly.animate('chart-conf-box',{data:[{y:CONF_BIN_MISMATCH,text:CONF_BIN_MISMATCH.map(function(v){return v.toFixed(1)+'%'})}]},{
-            transition:{duration:800,easing:'cubic-out'},frame:{duration:800}});
-        Plotly.animate('chart-conf-scatter',{data:[{x:SCATTER_X,y:SCATTER_Y}]},{
-            transition:{duration:1000,easing:'cubic-out'},frame:{duration:1000}});
-        Plotly.animate('chart-hc-acc',{data:[{x:HC_VALUES,text:HC_VALUES.map(function(v){return (v*100).toFixed(0)+'%'})}]},{
-            transition:{duration:900,easing:'cubic-out'},frame:{duration:900}});
-    },50);
-};
-
 // ═══════════════ TEMPORAL CHARTS ═══════════════
 (function(){
     var YEARS=TEMPORAL_YEARS;
-    var tStance=TEMPORAL_STANCE;
     var tNorms=TEMPORAL_NORMS;
     var normDims=TEMPORAL_NORM_DIMS;
     var tSurvey=TEMPORAL_SURVEY;
     var surveyLabels=TEMPORAL_SURVEY_LABELS;
     var surveyIds=TEMPORAL_SURVEY_IDS;
 
-    var stanceCats=['pro','against','against particular but pro','neither/mixed','pro but lack of options'];
-    var stanceColors={'pro':'#8fcc8f','against':'#ff9aa8','against particular but pro':'#ffb87a','neither/mixed':'#ffe87a','pro but lack of options':'#8fbfd9'};
-    var stanceShort={'pro':'Pro','against':'Against','against particular but pro':'Against part.','neither/mixed':'Neither','pro but lack of options':'Pro (no opt.)'};
-
-    // Helper: stacked area chart (proportions)
-    function makeStackedArea(divId, years, catData, catNames, catColors, showLegend){
-        var traces=[];
-        catNames.forEach(function(cat,i){
-            var yvals=years.map(function(y){return catData[cat]?catData[cat][y]||0:0});
-            traces.push({x:years,y:yvals,name:cat,type:'scatter',mode:'lines',
-                stackgroup:'one',line:{width:1.5,color:catColors[i]},
-                marker:{color:catColors[i]},fillcolor:catColors[i].replace(')',',0.6)').replace('rgb','rgba'),
-                showlegend:showLegend,
-                hovertemplate:'<b>'+cat+'</b><br>%{x}: %{y:.1f}%<extra></extra>'
-            });
-        });
-        Plotly.newPlot(divId,traces,Object.assign({},DL,{
-            height:220,margin:{t:5,b:35,l:35,r:10},
-            xaxis:{tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40',dtick:3},
-            yaxis:{title:{text:'%',font:{size:9,color:'#6a8caf'}},tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40',range:[0,100]},
-            legend:{font:{size:7,color:'#b0c4d8'},orientation:'h',y:-0.18,x:0.5,xanchor:'center'}
-        }),PC);
-    }
-
-    // 1. Author Stance temporal (3 sectors)
-    ['food','transport','housing'].forEach(function(sec,i){
-        var catData=tStance[sec];
-        var names=stanceCats.map(function(c){return stanceShort[c]||c});
-        var colors=stanceCats.map(function(c){return stanceColors[c]});
-        // Remap catData keys to short names
-        var remapped={};
-        stanceCats.forEach(function(c,ci){remapped[names[ci]]=catData[c]});
-        makeStackedArea('temporal-stance-'+sec,YEARS,remapped,names,colors,i===2);
-    });
-
-    // 2. Norm Dimensions temporal (togglable)
+    // 1. Norm Dimensions temporal — single plot, 3 sector lines, present only
     var currentDim='1.2.1_descriptive';
+    var _secCol={food:'#5ab4ac',transport:'#af8dc3',housing:'#f4a460'};
+    var _secLbl={food:'Food',transport:'Transport',housing:'Housing'};
     function drawNormDim(dim){
         var meta=normDims[dim];
-        var displayNames=meta.display||meta.cats;
-        ['food','transport','housing'].forEach(function(sec,i){
-            var divId='temporal-dim-'+sec;
+        var traces=[];
+        ['food','transport','housing'].forEach(function(sec){
             var catData=tNorms[sec][dim];
-            // Remap to display names if provided
-            var remapped={};
-            meta.cats.forEach(function(c,ci){remapped[displayNames[ci]]=catData[c]});
-            makeStackedArea(divId,YEARS,remapped,displayNames,meta.colors,i===2);
+            var yvals;
+            if(dim==='1.3.3_second_order'){
+                // merge strong(cats[0]="2") + weak(cats[1]="1")
+                yvals=YEARS.map(function(y){
+                    return (catData[meta.cats[0]]?catData[meta.cats[0]][y]||0:0)
+                          +(catData[meta.cats[1]]?catData[meta.cats[1]][y]||0:0);
+                });
+            }else{
+                var pc=meta.cats[0]; // "explicitly present" or "present"
+                yvals=YEARS.map(function(y){return catData[pc]?catData[pc][y]||0:0});
+            }
+            var col=_secCol[sec];
+            traces.push({x:YEARS,y:yvals,name:_secLbl[sec],type:'scatter',mode:'lines+markers',
+                line:{width:2.5,color:col,shape:'spline',smoothing:0.8},
+                marker:{size:4,color:col},showlegend:true,
+                hovertemplate:'<b>%{fullData.name}</b><br>%{x}: %{y:.1f}%<extra></extra>'
+            });
         });
+        var yLbl=dim==='1.3.3_second_order'?'% present (strong+weak)':'% present';
+        Plotly.newPlot('temporal-dim-combined',traces,Object.assign({},DL,{
+            height:260,margin:{t:10,b:50,l:40,r:10},
+            xaxis:{tickfont:{size:9,color:'#ffffff'},gridcolor:'#1a2a40',dtick:3},
+            yaxis:{title:{text:yLbl,font:{size:10,color:'#ffffff'}},tickfont:{size:9,color:'#ffffff'},gridcolor:'#1a2a40',rangemode:'tozero'},
+        }),PC);
     }
     drawNormDim(currentDim);
     window._setTemporalDim=function(dim){
@@ -1203,39 +1155,35 @@ window._animateVerification=function(){
         });
     };
 
-    // 3. Survey factors temporal (stacked per sector)
+    // 3. Survey factors temporal — individual spline curves (not stacked)
     var surveyColorPalette=['#5ab4ac','#af8dc3','#f4a460','#8fcc8f','#ff9aa8','#8fbfd9','#ffb87a','#c49fc4','#7cadc6','#ffe87a','#a8b8c2','#ffa8c2','#b8a8c8'];
-    ['food','transport','housing'].forEach(function(sec,i){
+    function drawSurveyLines(sec,i){
         var qids=surveyIds[sec];
         var traces=[];
         qids.forEach(function(qid,qi){
             var yvals=YEARS.map(function(y){return tSurvey[sec][qid]?tSurvey[sec][qid][y]||0:0});
             var shortLabel=surveyLabels[qid]||qid;
-            if(shortLabel.length>25) shortLabel=shortLabel.substring(0,22)+'...';
-            traces.push({x:YEARS,y:yvals,name:shortLabel,type:'scatter',mode:'lines',
-                stackgroup:'one',line:{width:1,color:surveyColorPalette[qi%surveyColorPalette.length]},
+            if(shortLabel.length>22) shortLabel=shortLabel.substring(0,20)+'...';
+            var col=surveyColorPalette[qi%surveyColorPalette.length];
+            traces.push({x:YEARS,y:yvals,name:shortLabel,type:'scatter',mode:'lines+markers',
+                line:{width:2,color:col,shape:'spline',smoothing:0.8},
+                marker:{size:4,color:col},
                 showlegend:true,
                 hovertemplate:'<b>'+(surveyLabels[qid]||qid)+'</b><br>%{x}: %{y:.1f}%<extra></extra>'
             });
         });
         Plotly.newPlot('temporal-survey-'+sec,traces,Object.assign({},DL,{
-            height:320,margin:{t:5,b:35,l:35,r:10},
-            xaxis:{tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40',dtick:3},
-            yaxis:{title:{text:'% yes',font:{size:9,color:'#6a8caf'}},tickfont:{size:8,color:'#4a6a8a'},gridcolor:'#1a2a40'},
-            legend:{font:{size:6,color:'#b0c4d8'},orientation:'v',y:1,x:1.02,xanchor:'left'}
+            height:340,margin:{t:10,b:40,l:38,r:5},
+            xaxis:{tickfont:{size:9,color:'#ffffff'},gridcolor:'#1a2a40',dtick:3},
+            yaxis:{title:{text:'% yes',font:{size:10,color:'#ffffff'}},tickfont:{size:9,color:'#ffffff'},gridcolor:'#1a2a40',rangemode:'tozero'},
+            legend:{font:{size:14,color:'#ffffff'},orientation:'h',y:-0.22,x:0.5,xanchor:'center',yanchor:'top',traceorder:'normal'}
         }),PC);
-    });
+    }
+    ['food','transport','housing'].forEach(function(sec,i){ drawSurveyLines(sec,i); });
 
     window._animateTemporal=function(){
-        // Redraw all temporal charts
-        ['food','transport','housing'].forEach(function(sec,i){
-            var catData=tStance[sec];
-            var names=stanceCats.map(function(c){return stanceShort[c]||c});
-            var colors=stanceCats.map(function(c){return stanceColors[c]});
-            var remapped={};stanceCats.forEach(function(c,ci){remapped[names[ci]]=catData[c]});
-            makeStackedArea('temporal-stance-'+sec,YEARS,remapped,names,colors,i===2);
-        });
         drawNormDim(currentDim);
+        ['food','transport','housing'].forEach(function(sec,i){ drawSurveyLines(sec,i); });
     };
 })();
 
@@ -1289,6 +1237,29 @@ html = html.replace("TEMPORAL_NORM_DIMS", norm_dims_js)
 html = html.replace("TEMPORAL_SURVEY_LABELS", survey_labels_js)
 html = html.replace("TEMPORAL_SURVEY_IDS", survey_ids_js)
 html = html.replace("TEMPORAL_SURVEY", temporal_survey_js)
+# Dynamic data from labeled_data
+html = html.replace("GATE_PCT_DATA",         gate_pct_js)
+html = html.replace("STANCE_COUNTS_DATA",    stance_counts_js)
+html = html.replace("SANKEY_SD_DATA",        sankey_data_js)
+html = html.replace("BUBBLE_FOOD_DATA",      bubble_food_js)
+html = html.replace("BUBBLE_TRANSPORT_DATA", bubble_transport_js)
+html = html.replace("BUBBLE_HOUSING_DATA",   bubble_housing_js)
+html = html.replace("SECTOR_TOTALS_DATA",    sector_totals_js)
+html = html.replace("FOOD_GATE_PCT_VAL",     str(gate_pct["food"]))
+html = html.replace("TRANSPORT_GATE_PCT_VAL",str(gate_pct["transport"]))
+html = html.replace("HOUSING_GATE_PCT_VAL",  str(gate_pct["housing"]))
+html = html.replace("RADIAL_FOOD_LABELS",      radial_food_labels_js)
+html = html.replace("RADIAL_TRANSPORT_LABELS", radial_transport_labels_js)
+html = html.replace("RADIAL_HOUSING_LABELS",   radial_housing_labels_js)
+html = html.replace("RADIAL_FOOD_TOOLTIPS",    radial_food_tips_js)
+html = html.replace("RADIAL_TRANSPORT_TOOLTIPS",radial_transport_tips_js)
+html = html.replace("RADIAL_HOUSING_TOOLTIPS", radial_housing_tips_js)
+html = html.replace("RADIAL_FOOD_VALS",        radial_food_vals_js)
+html = html.replace("RADIAL_TRANSPORT_VALS", radial_transport_vals_js)
+html = html.replace("RADIAL_HOUSING_VALS",   radial_housing_vals_js)
+html = html.replace("RADIAL_FOOD_MAX",       str(_food_max_r))
+html = html.replace("RADIAL_TRANSPORT_MAX",  str(_transport_max_r))
+html = html.replace("RADIAL_HOUSING_MAX",    str(_housing_max_r))
 
 with open("temp.html", "w", encoding="utf-8") as f:
     f.write(html)
