@@ -57,6 +57,16 @@ code = code.replace(
     '            v = lp[k]; return _math.exp(v) if v is not None else None'
 )
 
+# Normalize vllm_label case (verifier may produce "YES"/"Yes"/"yes" as separate cells)
+code = code.replace(
+    '    vs = json.load(f)\n',
+    '    vs = json.load(f)\n'
+    'for _tt in vs.values():\n'
+    '    for _sl in _tt.values():\n'
+    '        for _s in _sl:\n'
+    '            if _s.get("vllm_label"): _s["vllm_label"] = str(_s["vllm_label"]).strip().lower()\n'
+)
+
 # Fix schema paths (engine may have pre-move paths)
 code = code.replace(
     '"00_vllm_survey_question_final.json"',
