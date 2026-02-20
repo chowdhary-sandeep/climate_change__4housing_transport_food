@@ -350,6 +350,17 @@ for task_type, qid, display_label, sector_filter in ALL_QS:
         seen_labels[lbl] = seen_labels.get(lbl, 0) + 1
     all_labels = sorted(seen_labels.keys())
 
+    # Per-label accuracy from verification samples
+    _label_acc = {}
+    for s in samples:
+        _lbl = str(s.get("vllm_label", "")).strip()
+        _rl = str(s.get("reasoning_label", "")).strip()
+        if _lbl not in _label_acc:
+            _label_acc[_lbl] = {"agree": 0, "total": 0}
+        _label_acc[_lbl]["total"] += 1
+        if _lbl.lower() == _rl.lower():
+            _label_acc[_lbl]["agree"] += 1
+
     # Group samples by (label, sector): 2 agree + 1 disagree examples
     # Collect all, split by agreement, then pick 2 agree + 1 disagree (fallback to available)
     _all_grouped = {}
@@ -437,10 +448,16 @@ for task_type, qid, display_label, sector_filter in ALL_QS:
                         row_cells += '<div class="ex-cell ex-cell-empty"></div>'
 
         lbl_n = full_label_counts[qid].get(lbl.lower(), 0)
+        _la = _label_acc.get(lbl, {})
+        _la_n = _la.get("total", 0)
+        _la_pct = _la["agree"] / _la_n * 100 if _la_n > 0 else None
+        _la_col = "#8fcc8f" if _la_pct is not None and _la_pct >= 85 else "#ffb87a" if _la_pct is not None and _la_pct >= 70 else "#ff9aa8"
+        _la_badge = (f' <span class="ex-label-acc" style="color:{_la_col};font-size:0.8em;font-weight:600">acc={_la_pct:.0f}%</span>'
+                     if _la_pct is not None else "")
         answer_rows_html += (
             f'<div class="ex-answer-row">'
             f'<div class="ex-answer-label">{_esc(lbl_display)}'
-            f' <span class="ex-label-n">n={lbl_n:,}</span></div>'
+            f' <span class="ex-label-n">n={lbl_n:,}</span>{_la_badge}</div>'
             f'<div class="ex-9grid">{row_cells}</div>'
             f'</div>'
         )
