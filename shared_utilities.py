@@ -172,6 +172,7 @@ async def call_llm_single_choice(
     temperature: float = 0.1,
     max_tokens: int = 64,
     return_logprobs: bool = False,
+    reasoning_effort: Optional[str] = None,
 ) -> Tuple[str, str, Optional[float]]:
     """
     Call LLM API for one question; return (parsed_answer, raw_content, avg_logprob).
@@ -211,6 +212,10 @@ async def call_llm_single_choice(
     if return_logprobs:
         payload["logprobs"] = True
         payload["top_logprobs"] = 5  # Return top 5 alternative tokens per position
+
+    # Add reasoning effort for reasoning models (e.g. GPT-OSS-20B via LM Studio)
+    if reasoning_effort:
+        payload["reasoning_effort"] = reasoning_effort
 
     timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT)
     try:

@@ -5,10 +5,10 @@ import json
 from collections import defaultdict
 
 # Load data
-with open("paper4data/00_verification_results.json", "r", encoding="utf-8") as f:
+with open("paper4data/00_verification_results_ckpt.json", "r", encoding="utf-8") as f:
     vr = json.load(f)
 
-with open("paper4data/00_verification_samples.json", "r", encoding="utf-8") as f:
+with open("paper4data/00_verification_samples_ckpt.json", "r", encoding="utf-8") as f:
     vs = json.load(f)
 
 # Load full labeled data for temporal analysis
