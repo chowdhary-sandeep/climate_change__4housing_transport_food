@@ -464,22 +464,30 @@ SURVEY_QUESTIONS_BY_SECTOR: Dict[str, List[Dict[str, Any]]] = _SURVEY_DATA["ques
 
 
 def _parse_single_choice(content: str, options: List[str], map_to: Optional[Dict[str, str]]) -> str:
-    """Return rightmost-matching option (actual answer is at end of response); apply map_to if set.
-    When tied on position, prefer longest option (handles 'other reddit user' vs 'other').
-    Rightmost wins because models typically state reasoning first, answer last."""
+    """Match the first sentence of the response (model answers first, then explains).
+    Falls back to longest-first match on full text. Apply map_to if set.
+    First-sentence approach avoids catching option words in explanation context
+    (e.g. 'against' in 'for or against X', 'no' inside 'norm', 'pro' inside 'provides')."""
     c = content.strip().lower()
-    best_opt = None
-    best_pos = -1
-    for opt in sorted(options, key=len, reverse=True):
-        pos = c.rfind(opt.lower())
-        if pos > best_pos:
-            best_pos = pos
-            best_opt = opt
-    if best_opt is not None:
-        out = best_opt.lower()
-        if map_to:
-            out = map_to.get(out, out)
-        return out
+
+    def _longest_first(text: str) -> Optional[str]:
+        for opt in sorted(options, key=len, reverse=True):
+            if opt.lower() in text:
+                return opt.lower()
+        return None
+
+    # Try first sentence only (before first period or newline)
+    parts = re.split(r'[.\n]', c)
+    first = parts[0].strip() if parts else ""
+    match = _longest_first(first)
+    if match:
+        return map_to.get(match, match) if map_to else match
+
+    # Fall back to full text
+    match = _longest_first(c)
+    if match:
+        return map_to.get(match, match) if map_to else match
+
     return options[0] if options else ""
 
 
