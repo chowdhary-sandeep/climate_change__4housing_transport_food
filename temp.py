@@ -295,11 +295,8 @@ LABEL_DISPLAY = {
 }
 
 ALL_QS = []
-# Norms questions (all sectors)
-for qid, label in NORMS_Q_LABELS:
-    ALL_QS.append(("norms", qid, label, None))
 
-# Survey questions (sector-specific)
+# Survey questions first (sector-specific)
 survey_prompts = {}
 for sector_key, sec_lower in [("FOOD", "food"), ("TRANSPORT", "transport"), ("HOUSING", "housing")]:
     for frame_data in survey_meta[sector_key].values():
@@ -308,6 +305,10 @@ for sector_key, sec_lower in [("FOOD", "food"), ("TRANSPORT", "transport"), ("HO
             display = q.get("short_form") or q.get("wording", qid)
             survey_prompts[qid] = q.get("prompt", "")
             ALL_QS.append(("survey", qid, display, sec_lower))
+
+# Norms questions at the bottom
+for qid, label in NORMS_Q_LABELS:
+    ALL_QS.append(("norms", qid, label, None))
 
 EX_SECTORS = ["food", "transport", "housing"]
 EX_SEC_LABELS = {"food": "FOOD", "transport": "TRANSPORT", "housing": "HOUSING"}
