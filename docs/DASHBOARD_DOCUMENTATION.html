@@ -291,18 +291,18 @@ li::marker{color:#5ab4ac}
 
 <h3>3.4 Verification</h3>
 <ol>
-<li>Stratified sampling: 200 comments per question across 3 sectors (7,200 total across 36 questions).</li>
+<li>Stratified sampling: 50 comments per (question &times; label &times; sector) cell (7,355 total across 192 cells).</li>
 <li>Re-label with <strong>GPT-OSS-20B</strong> (LM Studio, <code>reasoning_effort=medium</code>) using <strong>identical prompts</strong>.</li>
 <li>Compute: accuracy, precision, recall, F1, Cohen&rsquo;s &kappa;, category estimation errors per label.</li>
 </ol>
 
 <div class="stats">
-<div class="stat"><div class="stat-val" style="color:#8fcc8f">84.8%</div><div class="stat-label">Mean Accuracy</div></div>
-<div class="stat"><div class="stat-val" style="color:#ffb87a">13.5%</div><div class="stat-label">Std Accuracy</div></div>
-<div class="stat"><div class="stat-val" style="color:#ff9aa8">47%</div><div class="stat-label">Min Accuracy</div></div>
-<div class="stat"><div class="stat-val" style="color:#8fcc8f">99%</div><div class="stat-label">Max Accuracy</div></div>
-<div class="stat"><div class="stat-val" style="color:#ffb87a">0.304</div><div class="stat-label">Mean Cohen&rsquo;s &kappa;</div></div>
-<div class="stat"><div class="stat-val" style="color:#b0c4d8">7,200</div><div class="stat-label">Samples Verified</div></div>
+<div class="stat"><div class="stat-val" style="color:#ffb87a">66.0%</div><div class="stat-label">Mean Accuracy</div></div>
+<div class="stat"><div class="stat-val" style="color:#ffb87a">12.9%</div><div class="stat-label">Std Accuracy</div></div>
+<div class="stat"><div class="stat-val" style="color:#ff9aa8">28.6%</div><div class="stat-label">Min Accuracy</div></div>
+<div class="stat"><div class="stat-val" style="color:#8fcc8f">82.2%</div><div class="stat-label">Max Accuracy</div></div>
+<div class="stat"><div class="stat-val" style="color:#8fcc8f">0.392</div><div class="stat-label">Mean Cohen&rsquo;s &kappa;</div></div>
+<div class="stat"><div class="stat-val" style="color:#b0c4d8">7,355</div><div class="stat-label">Samples Verified</div></div>
 </div>
 </div>
 

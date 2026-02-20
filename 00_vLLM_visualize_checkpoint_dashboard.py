@@ -51,6 +51,12 @@ code = code.replace(
     'Generated temp.html',
     'Generated dashboard_checkpoints.html'
 )
+# Fix None logprob values (stratified verifier samples may have None in logprobs dict)
+code = code.replace(
+    '            return _math.exp(lp[k])',
+    '            v = lp[k]; return _math.exp(v) if v is not None else None'
+)
+
 # Fix schema paths (engine may have pre-move paths)
 code = code.replace(
     '"00_vllm_survey_question_final.json"',
