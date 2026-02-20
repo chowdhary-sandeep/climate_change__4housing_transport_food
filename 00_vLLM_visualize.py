@@ -53,7 +53,7 @@ QUESTION_TITLES = {
 }
 
 # Load actual prompts from schema file (used by vLLM and verifier)
-def load_norms_prompts(schema_path: str = "00_vllm_ipcc_social_norms_schema.json") -> Dict[str, Dict[str, Any]]:
+def load_norms_prompts(schema_path: str = "schema/00_vllm_ipcc_social_norms_schema.json") -> Dict[str, Dict[str, Any]]:
     """Load the actual prompts sent to the LLM from the schema file."""
     try:
         with open(schema_path, "r", encoding="utf-8") as f:
@@ -90,7 +90,7 @@ def load_norms_labels(path: str) -> Dict[str, List[Dict[str, Any]]]:
         return json.load(f)
 
 
-def load_survey_metadata(survey_path: str = "00_vllm_survey_question_final.json") -> Dict[str, Dict[str, str]]:
+def load_survey_metadata(survey_path: str = "schema/00_vllm_survey_question_final.json") -> Dict[str, Dict[str, str]]:
     """Load survey question metadata (id -> wording, short_form, sector) for display titles."""
     survey_file = Path(survey_path)
     if not survey_file.exists():
@@ -909,7 +909,7 @@ def build_confidence_plots_only(samples_path: str) -> List[str]:
 
     # Load question labels
     try:
-        with open("00_vllm_survey_question_final.json", "r", encoding="utf-8") as f:
+        with open("schema/00_vllm_survey_question_final.json", "r", encoding="utf-8") as f:
             survey_data = json.load(f)
         question_labels = {}
         for sector_data in survey_data.values():
@@ -924,7 +924,7 @@ def build_confidence_plots_only(samples_path: str) -> List[str]:
         question_labels = {}
 
     try:
-        with open("00_vllm_ipcc_social_norms_schema.json", "r", encoding="utf-8") as f:
+        with open("schema/00_vllm_ipcc_social_norms_schema.json", "r", encoding="utf-8") as f:
             norms_schema = json.load(f)
         for q in norms_schema.get("norms_questions", []):
             question_labels[q["id"]] = q["id"]
@@ -1249,7 +1249,7 @@ def build_confidence_analysis_section(samples_path: str) -> List[str]:
 
     # Load survey questions for labels
     try:
-        with open("00_vllm_survey_question_final.json", "r", encoding="utf-8") as f:
+        with open("schema/00_vllm_survey_question_final.json", "r", encoding="utf-8") as f:
             survey_data = json.load(f)
         question_labels = {}
         for sector_data in survey_data.values():
@@ -1265,7 +1265,7 @@ def build_confidence_analysis_section(samples_path: str) -> List[str]:
 
     # Load norms schema for norms question labels
     try:
-        with open("00_vllm_ipcc_social_norms_schema.json", "r", encoding="utf-8") as f:
+        with open("schema/00_vllm_ipcc_social_norms_schema.json", "r", encoding="utf-8") as f:
             norms_schema = json.load(f)
         for q in norms_schema.get("norms_questions", []):
             question_labels[q["id"]] = q["id"]
@@ -1549,7 +1549,7 @@ def build_verification_section(verification_path: str, samples_path: Optional[st
     # Load survey questions to get short_form labels (will be reused for column 4)
     question_labels = {}
     try:
-        with open("00_vllm_survey_question_final.json", "r", encoding="utf-8") as f:
+        with open("schema/00_vllm_survey_question_final.json", "r", encoding="utf-8") as f:
             survey_data = json.load(f)
         for sector_data in survey_data.values():
             if not isinstance(sector_data, dict):
@@ -1564,7 +1564,7 @@ def build_verification_section(verification_path: str, samples_path: Optional[st
 
     # Load norms schema for norms question labels
     try:
-        with open("00_vllm_ipcc_social_norms_schema.json", "r", encoding="utf-8") as f:
+        with open("schema/00_vllm_ipcc_social_norms_schema.json", "r", encoding="utf-8") as f:
             norms_schema = json.load(f)
         for q in norms_schema.get("norms_questions", []):
             question_labels[q["id"]] = q["id"]  # Use ID for norms questions
@@ -2075,7 +2075,7 @@ h1 { text-align: center; color: #e0e0e0; font-size: 1.2em; margin: 0.3em 0; font
                 html_parts.append('<details class="prompt-dropdown"><summary>Read exact prompt &amp; choices sent to the LLM</summary>\n')
                 html_parts.append('<div class="prompt-box">\n')
                 # Load full survey data to get prompt
-                survey_file = Path("00_vllm_survey_question_final.json")
+                survey_file = Path("schema/00_vllm_survey_question_final.json")
                 if survey_file.exists():
                     with open(survey_file, "r", encoding="utf-8") as f:
                         survey_data = json.load(f)

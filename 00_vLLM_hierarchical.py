@@ -118,7 +118,7 @@ SECTOR_NAMES = ("transport", "housing", "food")
 # ---------------------------------------------------------------------------
 # Config: load from local_LLM_api_from_vLLM.json
 # ---------------------------------------------------------------------------
-CONFIG_PATH = "local_LLM_api_from_vLLM.json"
+CONFIG_PATH = "schema/local_LLM_api_from_vLLM.json"
 CACHE_PATH = os.path.join("paper4data", "sector_to_comments_cache.json")
 # Fast-load sample for downstream API testing (10k per sector; use with --limit-total 100)
 SAMPLE_CACHE_PATH = os.path.join("paper4data", "sector_to_comments_cache_10k_sample.json")
@@ -394,9 +394,9 @@ DISAGREEMENT_USER = "Does the following comment or post show disagreement with s
 # ---------------------------------------------------------------------------
 # Norms labelling (IPCC social drivers) — questions and prompts for dashboard
 # Output keys match norms_hierarchical_dashboard: 1.1_gate, 1.1.1_stance, etc.
-# Schema loaded from 00_vllm_ipcc_social_norms_schema.json
+# Schema loaded from schema/00_vllm_ipcc_social_norms_schema.json
 # ---------------------------------------------------------------------------
-def load_norms_schema(schema_path: str = "00_vllm_ipcc_social_norms_schema.json") -> Dict[str, Any]:
+def load_norms_schema(schema_path: str = "schema/00_vllm_ipcc_social_norms_schema.json") -> Dict[str, Any]:
     """Load norms schema from JSON file. Returns dict with keys: norms_system, sector_topic, stance_against_recheck_template, stance_against_strict_recheck_template, stance_against_strict_recheck_options, norms_questions."""
     schema_file = Path(__file__).parent / schema_path
     with open(schema_file, "r", encoding="utf-8") as f:
@@ -416,7 +416,7 @@ STANCE_AGAINST_STRICT_RECHECK_OPTIONS = _NORMS_SCHEMA["stance_against_strict_rec
 NORMS_QUESTIONS: List[Dict[str, Any]] = _NORMS_SCHEMA["norms_questions"]
 
 
-def load_survey_questions(survey_path: str = "00_vllm_survey_question_final.json", n_per_sector: Optional[int] = None) -> Dict[str, List[Dict[str, Any]]]:
+def load_survey_questions(survey_path: str = "schema/00_vllm_survey_question_final.json", n_per_sector: Optional[int] = None) -> Dict[str, List[Dict[str, Any]]]:
     """Load survey questions from JSON, select n_per_sector questions from each sector (or all if None), format as question dicts."""
     survey_file = Path(__file__).parent / survey_path
     with open(survey_file, "r", encoding="utf-8") as f:

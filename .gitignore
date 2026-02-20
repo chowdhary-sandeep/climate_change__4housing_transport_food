@@ -1,13 +1,19 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
 # Data: CSV and JSON (large caches, labels, CSVs)
 *.csv
 *.json
 
-# Keep config JSON tracked
-!local_LLM_api_from_vLLM.json
+# Keep schema/config JSON tracked (small files)
+!schema/*.json
 
-# Keep verification results and samples tracked (small enough)
+# Keep verification results tracked (small enough)
 !paper4data/00_verification_results.json
 !paper4data/00_verification_results_ckpt.json
+!paper4data/00_verification_results_v2.json
 !paper4data/00_verification_samples.json
 !paper4data/00_verification_samples_ckpt.json
 
@@ -18,6 +24,11 @@
 !paper4data/checkpoints/
 !paper4data/checkpoints/*.json
 
+# Keep tracker log
+!logs/00_tracker_full.txt
+
 # Too large for GitHub - keep ignored
 # paper4data/norms_labels_full.json  (190 MB)
+# paper4data/norms_labels_checkpoints_only.json  (170 MB)
+# paper4data/00_verification_samples_v2.json  (34 MB)
 # paper4data/sector_to_comments_cache.json  (1.6 GB)

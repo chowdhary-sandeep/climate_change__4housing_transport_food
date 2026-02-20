@@ -1,22 +1,47 @@
 """
-Generate dashboard_checkpoints.html:
-  - Uses norms_labels_full.json (123k checkpoint data, 41k/sector) for temporal analysis
-  - Merges DASHBOARD_DOCUMENTATION.html as a Docs tab
-  - Outputs dashboard_checkpoints.html
-"""
-import re, os
+Generate dashboard_checkpoints.html from current paper4data/checkpoints/ data.
 
-# ── 1. Read and patch temp.py source ─────────────────────────────────────────
-with open('temp.py', encoding='utf-8') as f:
+  - Merges all checkpoint JSONs into norms_labels_checkpoints_only.json
+  - Executes 00_vLLM_dashboard_engine.py (patched to use merged data)
+  - Injects docs/DASHBOARD_DOCUMENTATION.html as a Docs tab
+  - Outputs dashboard_checkpoints.html
+
+No dependency on temp.py or temp.html.
+"""
+import re, os, json
+from collections import defaultdict
+
+# ── 1. Merge all checkpoint files ─────────────────────────────────────────────
+ckpt_dir = 'paper4data/checkpoints'
+merged = defaultdict(list)
+for fname in sorted(os.listdir(ckpt_dir)):
+    if not fname.endswith('.json'):
+        continue
+    with open(os.path.join(ckpt_dir, fname), encoding='utf-8') as f:
+        data = json.load(f)
+    for sector, items in data.items():
+        merged[sector].extend(items)
+
+total = sum(len(v) for v in merged.values())
+per_sector = total // max(len(merged), 1)
+print(f"Merged {total:,} items ({per_sector:,}/sector) from {ckpt_dir}")
+
+merged_path = 'paper4data/norms_labels_checkpoints_only.json'
+with open(merged_path, 'w', encoding='utf-8') as f:
+    json.dump(dict(merged), f, ensure_ascii=False, indent=0)
+
+# ── 2. Read and patch 00_vLLM_dashboard_engine.py ────────────────────────────
+with open('00_vLLM_dashboard_engine.py', encoding='utf-8') as f:
     code = f.read()
 
 code = code.replace(
     'paper4data/norms_labels.json',
-    'paper4data/norms_labels_full.json'
+    merged_path
 )
+# Update subtitle comment count dynamically
 code = code.replace(
-    '9,000 comments',
-    '123,000 comments (checkpoint data)'
+    '9,000 comments &mdash; LLM-labeled with verification',
+    f'{total:,} comments ({per_sector:,}/sector) &mdash; LLM-labeled with verification'
 )
 code = code.replace(
     'open("temp.html", "w", encoding="utf-8")',
@@ -26,17 +51,30 @@ code = code.replace(
     'Generated temp.html',
     'Generated dashboard_checkpoints.html'
 )
+# Fix schema paths (engine may have pre-move paths)
+code = code.replace(
+    '"00_vllm_survey_question_final.json"',
+    '"schema/00_vllm_survey_question_final.json"'
+)
+code = code.replace(
+    '"00_vllm_ipcc_social_norms_schema.json"',
+    '"schema/00_vllm_ipcc_social_norms_schema.json"'
+)
+code = code.replace(
+    '"local_LLM_api_from_vLLM.json"',
+    '"schema/local_LLM_api_from_vLLM.json"'
+)
 
-# ── 2. Execute patched code ───────────────────────────────────────────────────
+# ── 3. Execute patched engine ─────────────────────────────────────────────────
 ns = {'__name__': '__main__'}
-exec(compile(code, '<patched_temp>', 'exec'), ns, ns)
+exec(compile(code, '00_vLLM_dashboard_engine.py', 'exec'), ns, ns)
 
 # ── 3. Load generated HTML ────────────────────────────────────────────────────
 with open('dashboard_checkpoints.html', encoding='utf-8') as f:
     html = f.read()
 
 # ── 4. Load and extract docs content ─────────────────────────────────────────
-with open('DASHBOARD_DOCUMENTATION.html', encoding='utf-8') as f:
+with open('docs/DASHBOARD_DOCUMENTATION.html', encoding='utf-8') as f:
     docs_html = f.read()
 
 style_m = re.search(r'<style>(.*?)</style>', docs_html, re.DOTALL)
@@ -46,18 +84,18 @@ body_m = re.search(r'<body>(.*?)</body>', docs_html, re.DOTALL)
 docs_body = body_m.group(1).strip() if body_m else ''
 
 # ── 4b. Patch docs body for checkpoint data values ────────────────────────────
-# 123k total (41k/sector), ~2.1M labels
-docs_body = docs_body.replace('9,000 comments (3,000/sector)', '123,000 comments (41,000/sector)')
-docs_body = docs_body.replace('9,000 &times; 7 norms', '123,000 &times; 7 norms')
-docs_body = docs_body.replace('3,000 &times; 13', '41,000 &times; 13')
-docs_body = docs_body.replace('3,000 &times; 6', '41,000 &times; 6')
-docs_body = docs_body.replace('3,000 &times; 10', '41,000 &times; 10')
-docs_body = docs_body.replace('<b>150,000 individual labels</b>', '<b>~2.1M individual labels</b>')
-docs_body = docs_body.replace('>9,000<', '>123,000<')
-docs_body = docs_body.replace('>150K<', '>~2.1M<')
-docs_body = docs_body.replace('3,000/sector with equal yearly', '41,000/sector with equal yearly')
-docs_body = docs_body.replace('sample 3,000/sector', 'sample 41,000/sector')
-docs_body = docs_body.replace('9,000 records with comment', '123,000 records with comment')
+# 21,300 total (7,100/sector)
+docs_body = docs_body.replace('9,000 comments (3,000/sector)', '21,300 comments (7,100/sector)')
+docs_body = docs_body.replace('9,000 &times; 7 norms', '21,300 &times; 7 norms')
+docs_body = docs_body.replace('3,000 &times; 13', '7,100 &times; 13')
+docs_body = docs_body.replace('3,000 &times; 6', '7,100 &times; 6')
+docs_body = docs_body.replace('3,000 &times; 10', '7,100 &times; 10')
+docs_body = docs_body.replace('<b>150,000 individual labels</b>', '<b>~277,000 individual labels</b>')
+docs_body = docs_body.replace('>9,000<', '>21,300<')
+docs_body = docs_body.replace('>150K<', '>~277K<')
+docs_body = docs_body.replace('3,000/sector with equal yearly', '7,100/sector with equal yearly')
+docs_body = docs_body.replace('sample 3,000/sector', 'sample 7,100/sector')
+docs_body = docs_body.replace('9,000 records with comment', '21,300 records with comment')
 docs_body = docs_body.replace('Labeled Comments</div>', 'Labeled Comments (checkpoint)</div>')
 
 # ── 5. Scope docs CSS to #tab-docs ────────────────────────────────────────────

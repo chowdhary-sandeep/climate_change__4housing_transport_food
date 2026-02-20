@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>Norms Hierarchical - Example Comments</title>
+<style>
+* { box-sizing: border-box; }
+html { background: #000000; }
+body { font-family: "Inter", "Segoe UI", system-ui, sans-serif; margin: 0; padding: 10px; background: #000000; color: #e0e0e0; min-height: 100vh; font-size: 12px; }
+h1 { text-align: center; color: #e0e0e0; font-size: 1.2em; margin: 0.3em 0; font-weight: 600; }
+.back-link { text-align: center; margin-bottom: 12px; font-size: 0.75em; }
+.back-link a { color: #6c9bcf; text-decoration: none; }
+.back-link a:hover { text-decoration: underline; }
+.question-section { max-width: 1400px; margin: 0 auto 8px; background: #1a1a1a; border-radius: 8px; box-shadow: 0 1px 3px rgba(255,255,255,0.05); }
+.question-section summary { font-size: 13px; font-weight: 600; color: #b0b0b0; padding: 10px 15px; cursor: pointer; list-style: none; border-bottom: 1px solid transparent; }
+.question-section summary::-webkit-details-marker { display: none; }
+.question-section summary::before { content: "▶ "; color: #6c9bcf; font-size: 9px; }
+.question-section[open] summary::before { content: "▼ "; }
+.question-section[open] summary { border-bottom-color: #3a3a3a; }
+.question-content { padding: 14px; padding-top: 8px; }
+.category-group { margin-bottom: 12px; }
+.category-title { font-weight: 600; font-size: 10px; margin-bottom: 6px; padding: 5px 9px; border-radius: 12px; display: inline-block; color: #e0e0e0; background: #2a2a2a; }
+.sectors-row { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; }
+.sector-column { display: flex; flex-direction: column; min-width: 0; }
+.sector-header { font-weight: 600; font-size: 8px; color: #888888; margin-bottom: 3px; text-transform: uppercase; }
+.example-comment { position: relative; padding: 5px 7px; border-radius: 6px; font-size: 9px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; border-left: 2px solid #4a6d7c; background: #252525; color: #e0e0e0; }
+.confidence-badge { position: absolute; top: 3px; right: 3px; font-size: 7px; color: #888; background: #1a1a1a; padding: 1px 3px; border-radius: 3px; }
+.prompt-dropdown { margin-bottom: 12px; }
+.prompt-dropdown summary { cursor: pointer; color: #6c9bcf; font-size: 10px; user-select: none; }
+.prompt-dropdown summary:hover { text-decoration: underline; }
+.prompt-box { margin-top: 8px; padding: 9px; border-radius: 6px; background: #252525; border: 1px solid #3a3a3a; font-size: 9.5px; }
+.prompt-box .prompt-text { color: #e0e0e0; line-height: 1.45; margin-bottom: 7px; }
+.prompt-box .choices-label { color: #a0a0a0; font-weight: 600; margin-bottom: 3px; font-size: 9.5px; }
+.prompt-box .choices-list { color: #b0b0b0; list-style: none; padding-left: 0; font-size: 9.5px; }
+.prompt-box .choices-list li { margin: 2px 0; }
+</style>
+</head>
+<body>
+<h1>Example Comments by Category</h1>
+<div class="back-link"><a href="dashboard_checkpoints.html">&lt;- Back to Dashboard</a></div>
+<div style="max-width: 1400px; margin: 0 auto 20px; background: #1a1a1a; padding: 12px 18px; border-radius: 6px; border-left: 3px solid #6c9bcf;">
+<div style="font-size: 11px; font-weight: 600; color: #b0b0b0; margin-bottom: 6px;">Legend:</div>
+<div style="display: flex; gap: 30px; flex-wrap: wrap; font-size: 10px; color: #a0a0a0;">
+<div style="display: flex; align-items: center; gap: 8px;">
+<span style="display: inline-block; width: 30px; height: 20px; background: #252525; border-left: 4px solid #8fcc8f; border-radius: 3px;"></span>
+<span><strong style="color: #8fcc8f;">Green border:</strong> Verifier (reasoning model) agrees with fast labeler</span>
+</div>
+<div style="display: flex; align-items: center; gap: 8px;">
+<span style="display: inline-block; width: 30px; height: 20px; background: #252525; border-left: 4px solid #ff9aa8; border-radius: 3px;"></span>
+<span><strong style="color: #ff9aa8;">Red border:</strong> Verifier disagrees with fast labeler</span>
+</div>
+<div style="display: flex; align-items: center; gap: 8px;">
+<span style="display: inline-block; padding: 1px 3px; background: #1a1a1a; border-radius: 3px; font-size: 7px; color: #888;">0.95</span>
+<span><strong style="color: #e0e0e0;">Top right number:</strong> Confidence score from fast labeler (0-1)</span>
+</div>
+</div>
+</div>
+<details class="question-section"><summary>Against recheck (2nd pass)</summary>
+<div class="question-content">
+<p style="font-size: 10px; color: #7f8c8d; margin-bottom: 10px;">Comments that were labelled &quot;against&quot; in Author stance (1st pass) and re-labelled in a stringent second LLM pass.</p>
+<div class="category-group"><div class="category-title">against</div><div class="sectors-row">
+<div class="sector-column"><div class="sector-header">FOOD · 1</div><div class="example-comment">But if everyone in earth went vegan we wouldn't be able to produce enough food. Also eating meat isn't barbaric it is something normal that humans have been doing since forever.</div></div>
+<div class="sector-column"><div class="sector-header">FOOD · 2</div><div class="example-comment">You can't be a soul mate with someone who considers you a brutal murderer and evil person. This includes both vegans and religious people. They simply consider others evil.</div></div>
+<div class="sector-column"><div class="sector-header">FOOD · 3</div><div class="example-comment">Veganism is over! 
+Bring on the veal!</div></div>
+<div class="sector-column"><div class="sector-header">TRANSPORT · 1</div><div class="example-comment">EV summit was very meaningful, it showed who Biden would support. Certainly not EVs, more like labor and his friends.</div></div>
+<div class="sector-column"><div class="sector-header">TRANSPORT · 2</div><div class="example-comment">That is not feasible, there is a 160 mile drive I do frequently in the winter. I start in sub-20 degree weather, I climb over a 10,000' mountain pass, there are large stretches of the drive where there are horrible head winds. 
+I've never had to fill up in an ICE, even if I did there are 4 gas stations on the route. I fill up before I leave, because that is the safe and smart thing to do, and if something un-expected happened I have options to top off.  
+While with the EV, there are no charging ...</div></div>
+<div class="sector-column"><div class="sector-header">TRANSPORT · 3</div><div class="example-comment">Why TESLA is going to be BANKRUPT by 2030</div></div>
+<div class="sector-column"><div class="sector-header">HOUSING · 1</div><div class="example-comment">Unfortunately not. Firstly, Ameren would not provide a shred of documentation or information related to the credit we would receive, told us to get all info through the installer (who is HORRIBLE BTW) Sales rep who sold us the system gave a song and dance about how the kW in / kW out was averaged annually and any overage credit built up would carry us into the winter. Total lies, they &quot;settle&quot; monthly for almost half the cost of incoming power. This is what makes me furious.
+After the insane fig...</div></div>
+<div class="sector-column"><div class="sector-header">HOUSING · 2</div><div class="example-comment">Here's some damage Sunrun did to my house. One quote I got for just the roof work was almost $23,000, not including damage in the ceiling and SEVERAL walls. 
+[https://www.youtube.com/shorts/Rk83gGda220](https://www.youtube.com/shorts/Rk83gGda220)
+You might want to think twice about buying with Sunrun. I have a bad leaking roof they INSTALLED two years ago and now they won't fix it.</div></div>
+<div class="sector-column"><div class="sector-header">HOUSING · 3</div><div class="example-comment">Right, but your 4.8 GW of Solar panels ONLY PRODUCES THAT for a fraction of the time.
+From May - July, you'll be generating you'll get a total of 6 hours of production from each panel, spread across 12 or so hours.
+In November or January, you'll get 20% of that on average.
+And then consider cloudy days, blizzards, where you get even less than that.
+And again, you're talking the total refit cost of nuclear, and only taking the base cost of panels. Your racking doesn't exist. The wirings not there...</div></div>
+</div></div>
+<div class="category-group"><div class="category-title">frustrated but still pro</div><div class="sectors-row">
+<div class="sector-column"><div class="sector-header">FOOD · 1</div><div class="example-comment">Almond milk is good but BEWARE.  The Silk brand is LOADED with sugar.  It's so, so bad for you.</div></div>
+<div class="sector-column"><div class="sector-header">FOOD · 2</div><div class="example-comment">Within the first 30 seconds, BTW, you see on-screen that she's feeding her baby (one year old daughter) nothing but meat &amp;amp; milk.  :-/  &quot;Carnivore diet&quot; for a newborn baby.  :-/</div></div>
+<div class="sector-column"><div class="sector-header">FOOD · 3</div><div class="example-comment">Why are most vegans here in denial about being preachy? Do none of you see jokes on TV where everyone makes fun of us for rubbing veganism in people's faces and being too preachy? I do not bring it up, nor have I tried to convert people. It's just as annoying for someone trying to get you to eat meat as it is for someone trying to get someone not to eat meat.</div></div>
+<div class="sector-column"><div class="sector-header">TRANSPORT · 1</div><div class="example-comment">It looks like a Volt and a Prius had a baby. Honestly, it's not hard to design an [aerodynamic car](http://static.cargurus.com/images/site/2009/03/17/02/18/2002_honda_insight-pic-53437.jpeg) that looks good. Granted, this is a concept not a production car, but the real thing will probably look worse.
+If we're ever going to see electric cars get adopted by normal people, they need to stop with this.
+Tesla can do it, why is it so hard Mitsubishi?</div></div>
+<div class="sector-column"><div class="sector-header">TRANSPORT · 2</div><div class="example-comment">I know an engineer who has a pickup truck, doesn't haul anything for work, and has about a 40 mile commute every day, and I was heading over to his house just after picking up my PHEV, only to find that he had bought a second car... a Charger.  It's now a 3 car household for 2 people.  I kind of bit my tongue... like... you're smart enough to be an engineer, smart enough to lean left, smart enough to believe climate change is real... but not smart enough to realize that you are the embodiment of...</div></div>
+<div class="sector-column"><div class="sector-header">TRANSPORT · 3</div><div class="example-comment">Problem with fast charging is that you're counting on a charging station which might not always be available. They can be too busy (CCS is still rare), blocked, or even broken.
+Always try to plan making it home without charging, unless you are willing to wait, and/or have a backup plan.
+And don't forget, many folks complain about the Volt being too small in the back, and the Spark is even smaller.</div></div>
+<div class="sector-column"><div class="sector-header">HOUSING · 1</div><div class="example-comment">The answer to the question is its not cost effective. Buy a car and mod it to have solar panels; waste your money; have enough power to drive across a parking lot. :)</div></div>
+<div class="sector-column"><div class="sector-header">HOUSING · 2</div><div class="example-comment">Your calculations are much more accurate.  Where are you located, who is your power company and what rate plan are you on.  I’m in California and installed solar 4 - 5 years ago.  Based on my rate plan, payback was less than 5 years.  But now that’s too much solar on the grid and power companies are penalizing customers for installing solar.  Had I installed solar 2 years ago, payback period would have been 12 years due to the power company changing the rate plan.  If I were to install the same ...</div></div>
+<div class="sector-column"><div class="sector-header">HOUSING · 3</div><div class="example-comment">Crippling costs: because they shut down so many fossil fuel stations.  
+Unreliable: because they installed wind &amp;amp; solar.
+It's pretty simple really.
+They cannot &quot;export power to Asia&quot; except nations quite close to them. The longer the line? The less power gets there. It's counter-productive after a certain distance. 
+Building gigantic batteries? Out of what? What an idiot.
+That storm stopped the Wind turbines (too fast!) and solar panels (too dark!) and then the powerline from coal stations i...</div></div>
+</div></div>
+<div class="category-group"><div class="category-title">unclear stance</div><div class="sectors-row">
+<div class="sector-column"><div class="sector-header">FOOD · 1</div><div class="example-comment">But to do that you'd have to eat marmite, I'd rather die from b12 deficiency anemia.
+&amp;lt;edit&amp;gt; Also; &amp;gt;*silly pills* Yes, because what we need is unhealthy vegans, I can't wait for that to become a stereotype...</div></div>
+<div class="sector-column"><div class="sector-header">FOOD · 2</div><div class="example-comment">you cant champion veganism if you're dead or in a coma, right?</div></div>
+<div class="sector-column"><div class="sector-header">FOOD · 3</div><div class="example-comment">You should probably just get out.
+Not /vegan mind you, but the entire internet. Really. You're an imbecile.</div></div>
+<div class="sector-column"><div class="sector-header">TRANSPORT · 1</div><div class="example-comment">Elon Musk Sets Record Straight: Tesla Model X Will Have Falcon Doors</div></div>
+<div class="sector-column"><div class="sector-header">TRANSPORT · 2</div><div class="example-comment">&amp;gt;Biden needs to get rid of the Trump appointee for the head of the post office, its the only
+&amp;gt;way that the post office goes full electric. 
+The first sentence is spot on, but the second sentence is not true at all. DeJoy, shithead that he is, doesn't give a damn either way.
+DeJoy is perfectly happy to go all BEV if Congress covers the cost difference between the ICE and BEV models.
+Call your representatives in DC!</div></div>
+<div class="sector-column"><div class="sector-header">TRANSPORT · 3</div><div class="example-comment">Tesla Reports Q3 Earnings; Delivers Record 11,603 Vehicles</div></div>
+<div class="sector-column"><div class="sector-header">HOUSING · 1</div><div class="example-comment">I would recommend you shop around. SunRun is normally more expensive. 100*12mo=1200*9yr=10,800. 
+Only makes sense if you will stay in this house or keep it as an investment.</div></div>
+<div class="sector-column"><div class="sector-header">HOUSING · 2</div><div class="example-comment">Would it be good or bad to have a lightening rod close to your solar panels to avoid a direct hit to critical electrical wiring or devices?</div></div>
+<div class="sector-column"><div class="sector-header">HOUSING · 3</div><div class="example-comment">I think I have a solution, create my own SOC chart. Using typical household loads, fridge, freezer, TV, etc. I will track the voltage and kWH consumed,  And create my own SOC chart. 
+And do this at different starting voltages. Cutoff the solar panels out and do it when it's a high voltage. 
+Then I'll have my own map of how much power would be consumed over that time frame.</div></div>
+</div></div>
+</div></details>
+</body>
+</html>

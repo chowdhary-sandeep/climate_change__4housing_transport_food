@@ -31,7 +31,7 @@ REQUEST_TIMEOUT = 120  # seconds
 # Schema Loading
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def load_norms_schema(schema_path: str = "00_vllm_ipcc_social_norms_schema.json") -> Dict[str, Any]:
+def load_norms_schema(schema_path: str = "schema/00_vllm_ipcc_social_norms_schema.json") -> Dict[str, Any]:
     """Load IPCC social norms schema from JSON file."""
     schema_file = Path(__file__).parent / schema_path
     with open(schema_file, "r", encoding="utf-8") as f:
@@ -39,7 +39,7 @@ def load_norms_schema(schema_path: str = "00_vllm_ipcc_social_norms_schema.json"
     return schema
 
 
-def load_survey_questions(survey_path: str = "00_vllm_survey_question_final.json", n_per_sector: Optional[int] = None) -> Dict[str, Any]:
+def load_survey_questions(survey_path: str = "schema/00_vllm_survey_question_final.json", n_per_sector: Optional[int] = None) -> Dict[str, Any]:
     """
     Load survey questions from JSON, select n_per_sector questions from each sector (or all if None).
     Returns: {"survey_system": str, "questions_by_sector": {sector: [question_dicts]}}
@@ -83,7 +83,7 @@ def load_survey_questions(survey_path: str = "00_vllm_survey_question_final.json
     return {"survey_system": survey_system, "questions_by_sector": survey_questions_by_sector}
 
 
-def load_api_config(config_path: str = "local_LLM_api_from_vLLM.json") -> Dict[str, Any]:
+def load_api_config(config_path: str = "schema/local_LLM_api_from_vLLM.json") -> Dict[str, Any]:
     """Load API configuration from JSON file."""
     with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
