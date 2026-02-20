@@ -464,15 +464,22 @@ SURVEY_QUESTIONS_BY_SECTOR: Dict[str, List[Dict[str, Any]]] = _SURVEY_DATA["ques
 
 
 def _parse_single_choice(content: str, options: List[str], map_to: Optional[Dict[str, str]]) -> str:
-    """Return first matching option (by substring, longest first); apply map_to if set."""
+    """Return rightmost-matching option (actual answer is at end of response); apply map_to if set.
+    When tied on position, prefer longest option (handles 'other reddit user' vs 'other').
+    Rightmost wins because models typically state reasoning first, answer last."""
     c = content.strip().lower()
-    # Prefer longest option first so "explicit approval" matches before "explicit"
+    best_opt = None
+    best_pos = -1
     for opt in sorted(options, key=len, reverse=True):
-        if opt.lower() in c:
-            out = opt.lower()
-            if map_to:
-                out = map_to.get(out, out)
-            return out
+        pos = c.rfind(opt.lower())
+        if pos > best_pos:
+            best_pos = pos
+            best_opt = opt
+    if best_opt is not None:
+        out = best_opt.lower()
+        if map_to:
+            out = map_to.get(out, out)
+        return out
     return options[0] if options else ""
 
 

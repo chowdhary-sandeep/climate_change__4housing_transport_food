@@ -145,13 +145,21 @@ def _parse_single_choice(content: str, options: List[str], map_to: Optional[Dict
     # Clean up whitespace and lowercase
     c = ' '.join(c.split()).lower()
 
-    # Prefer longest option first so "explicit approval" matches before "explicit"
+    # Use rightmost-match: actual answer is at end; when tied, longest wins
+    # (handles "explicit approval" vs "explicit", and avoids matching option
+    #  names that appear in explanation text before the final answer)
+    best_opt = None
+    best_pos = -1
     for opt in sorted(options, key=len, reverse=True):
-        if opt.lower() in c:
-            out = opt.lower()
-            if map_to:
-                out = map_to.get(out, out)
-            return out
+        pos = c.rfind(opt.lower())
+        if pos > best_pos:
+            best_pos = pos
+            best_opt = opt
+    if best_opt is not None:
+        out = best_opt.lower()
+        if map_to:
+            out = map_to.get(out, out)
+        return out
 
     # If no match, return first option as default
     return options[0] if options else ""
