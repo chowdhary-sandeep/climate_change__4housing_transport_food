@@ -488,6 +488,20 @@ def _parse_single_choice(content: str, options: List[str], map_to: Optional[Dict
     if match:
         return map_to.get(match, match) if map_to else match
 
+    # Handle single-char / short responses (e.g. "y"→"yes", "n"→"no")
+    short = c.strip()
+    if len(short) <= 2:
+        for opt in sorted(options, key=len, reverse=True):
+            if opt.lower().startswith(short):
+                result = opt.lower()
+                return map_to.get(result, result) if map_to else result
+        # Boolean coercion for yes/no questions
+        opts_lower = [o.lower() for o in options]
+        if short in ('1', 't', 'true') and 'yes' in opts_lower:
+            return map_to.get('yes', 'yes') if map_to else 'yes'
+        if short in ('0', 'f', 'false') and 'no' in opts_lower:
+            return map_to.get('no', 'no') if map_to else 'no'
+
     return options[0] if options else ""
 
 
