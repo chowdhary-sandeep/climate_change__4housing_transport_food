@@ -10,11 +10,8 @@ __pycache__/
 # Keep schema/config JSON tracked (small files)
 !schema/*.json
 
-# Keep verification results tracked (small enough)
-!paper4data/00_verification_results.json
+# Keep verification results tracked (latest only)
 !paper4data/00_verification_results_ckpt.json
-!paper4data/00_verification_results_v2.json
-!paper4data/00_verification_samples.json
 !paper4data/00_verification_samples_ckpt.json
 
 # Keep norms labels (small enough, not full 123k version)
