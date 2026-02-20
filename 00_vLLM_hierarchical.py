@@ -709,30 +709,32 @@ async def label_one_item_norms(
     sem: asyncio.Semaphore,
     sector: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Run all NORMS_QUESTIONS and SURVEY_QUESTIONS for one comment; return { comment_index, comment, answers, logprobs } (dashboard format). sector used for sector-specific prompts (e.g. stance toward EVs vs solar vs diet). Safety net: if stance is 'against', recheck for 'pro but lack of options'. Collects log probabilities for all questions to measure labeler confidence."""
+    """Run all NORMS_QUESTIONS and SURVEY_QUESTIONS for one comment; return { comment_index, comment, answers, logprobs, raw_responses } (dashboard format). sector used for sector-specific prompts (e.g. stance toward EVs vs solar vs diet). Safety net: if stance is 'against', recheck for 'pro but lack of options'. Collects log probabilities for all questions to measure labeler confidence."""
     async with sem:
         answers: Dict[str, str] = {}
         logprobs: Dict[str, Optional[float]] = {}
+        raw_responses: Dict[str, str] = {}
 
         # Run norms questions
         for q in NORMS_QUESTIONS:
-            ans, _, logprob = await call_vllm_single_choice(session, item["body"], q, base_url, model_name, sector=sector)
+            ans, raw, logprob = await call_vllm_single_choice(session, item["body"], q, base_url, model_name, sector=sector)
             answers[q["id"]] = ans
             logprobs[q["id"]] = logprob
+            raw_responses[q["id"]] = raw
 
         # Run survey questions for this sector (if any)
         if sector and sector in SURVEY_QUESTIONS_BY_SECTOR:
             for q in SURVEY_QUESTIONS_BY_SECTOR[sector]:
-                ans, _, logprob = await call_vllm_single_choice(session, item["body"], q, base_url, model_name, sector=sector, system_prompt=SURVEY_SYSTEM)
+                ans, raw, logprob = await call_vllm_single_choice(session, item["body"], q, base_url, model_name, sector=sector, system_prompt=SURVEY_SYSTEM)
                 answers[q["id"]] = ans
                 logprobs[q["id"]] = logprob
+                raw_responses[q["id"]] = raw
 
         # Safety net: if model said "against", recheck whether text asks for more options or complains options insufficient
         if sector and answers.get("1.1.1_stance") == "against":
             is_lack_of_options, lack_logprob = await _recheck_against_is_lack_of_options(session, item["body"], sector, base_url, model_name)
             if is_lack_of_options:
                 answers["1.1.1_stance"] = "pro but lack of options"
-                # Store logprob for the recheck decision
                 logprobs["1.1.1_stance_lack_recheck"] = lack_logprob
             else:
                 # Second pass (stringent): still "against" — recheck with strict question; store result for dashboard
@@ -745,6 +747,7 @@ async def label_one_item_norms(
             "comment": item["body"],
             "answers": answers,
             "logprobs": logprobs,
+            "raw_responses": raw_responses,
         }
         # Preserve year if present (for temporal analysis)
         if "year" in item:
