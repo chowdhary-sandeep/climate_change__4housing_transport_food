@@ -6,11 +6,11 @@
     "total_samples": 7355,
     "total_empty": 0,
     "empty_response_pct": 0.0,
-    "mean_accuracy": 0.665,
+    "mean_accuracy": 0.666,
     "std_accuracy": 0.124,
     "min_accuracy": 0.352,
     "max_accuracy": 0.829,
-    "mean_kappa": 0.394,
+    "mean_kappa": 0.395,
     "data_source": "paper4data/norms_labels_checkpoints_only.json",
     "samples_per_cell": 50,
     "model": "openai/gpt-oss-20b",
@@ -25,9 +25,9 @@
         "n_empty_responses": 0,
         "empty_response_pct": 0.0,
         "accuracy": 0.565,
-        "macro_precision": 0.378,
-        "macro_recall": 0.425,
-        "macro_f1": 0.334,
+        "macro_precision": 0.566,
+        "macro_recall": 0.637,
+        "macro_f1": 0.5,
         "cohen_kappa": 0.132,
         "category_estimation": {
           "0": {
@@ -38,15 +38,9 @@
           },
           "1": {
             "reasoning_pct": 14.0,
-            "fast_model_pct": 49.8,
-            "error": 35.9,
+            "fast_model_pct": 50.2,
+            "error": 36.2,
             "type": "over"
-          },
-          "yes": {
-            "reasoning_pct": 0.0,
-            "fast_model_pct": 0.3,
-            "error": 0.3,
-            "type": "accurate"
           }
         }
       },
@@ -270,16 +264,16 @@
         "n_samples_valid": 451,
         "n_empty_responses": 0,
         "empty_response_pct": 0.0,
-        "accuracy": 0.379,
-        "macro_precision": 0.285,
-        "macro_recall": 0.369,
-        "macro_f1": 0.219,
-        "cohen_kappa": 0.08,
+        "accuracy": 0.384,
+        "macro_precision": 0.382,
+        "macro_recall": 0.491,
+        "macro_f1": 0.291,
+        "cohen_kappa": 0.074,
         "category_estimation": {
           "0": {
-            "reasoning_pct": 85.4,
-            "fast_model_pct": 33.3,
-            "error": -52.1,
+            "reasoning_pct": 87.6,
+            "fast_model_pct": 33.5,
+            "error": -54.1,
             "type": "under"
           },
           "1": {
@@ -293,12 +287,6 @@
             "fast_model_pct": 33.3,
             "error": 25.9,
             "type": "over"
-          },
-          "none": {
-            "reasoning_pct": 2.2,
-            "fast_model_pct": 0.2,
-            "error": -2.0,
-            "type": "accurate"
           }
         }
       }
@@ -518,18 +506,12 @@
         "n_samples_valid": 114,
         "n_empty_responses": 0,
         "empty_response_pct": 0.0,
-        "accuracy": 0.684,
-        "macro_precision": 0.476,
-        "macro_recall": 0.51,
-        "macro_f1": 0.453,
-        "cohen_kappa": 0.405,
+        "accuracy": 0.693,
+        "macro_precision": 0.722,
+        "macro_recall": 0.766,
+        "macro_f1": 0.686,
+        "cohen_kappa": 0.416,
         "category_estimation": {
-          "1": {
-            "reasoning_pct": 0.9,
-            "fast_model_pct": 0.0,
-            "error": -0.9,
-            "type": "accurate"
-          },
           "no": {
             "reasoning_pct": 71.1,
             "fast_model_pct": 43.9,
@@ -537,9 +519,9 @@
             "type": "under"
           },
           "yes": {
-            "reasoning_pct": 28.1,
+            "reasoning_pct": 28.9,
             "fast_model_pct": 56.1,
-            "error": 28.1,
+            "error": 27.2,
             "type": "over"
           }
         }
@@ -576,18 +558,12 @@
         "n_samples_valid": 107,
         "n_empty_responses": 0,
         "empty_response_pct": 0.0,
-        "accuracy": 0.692,
-        "macro_precision": 0.47,
-        "macro_recall": 0.493,
-        "macro_f1": 0.458,
-        "cohen_kappa": 0.403,
+        "accuracy": 0.701,
+        "macro_precision": 0.713,
+        "macro_recall": 0.741,
+        "macro_f1": 0.695,
+        "cohen_kappa": 0.415,
         "category_estimation": {
-          "1": {
-            "reasoning_pct": 0.9,
-            "fast_model_pct": 0.0,
-            "error": -0.9,
-            "type": "accurate"
-          },
           "no": {
             "reasoning_pct": 67.3,
             "fast_model_pct": 46.7,
@@ -595,9 +571,9 @@
             "type": "under"
           },
           "yes": {
-            "reasoning_pct": 31.8,
+            "reasoning_pct": 32.7,
             "fast_model_pct": 53.3,
-            "error": 21.5,
+            "error": 20.6,
             "type": "over"
           }
         }
