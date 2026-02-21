@@ -468,7 +468,11 @@ def _parse_single_choice(content: str, options: List[str], map_to: Optional[Dict
     Falls back to longest-first match on full text. Apply map_to if set.
     First-sentence approach avoids catching option words in explanation context
     (e.g. 'against' in 'for or against X', 'no' inside 'norm', 'pro' inside 'provides')."""
-    c = content.strip().lower()
+    c = content.strip()
+
+    # Strip HTML/XML tokens (e.g. <s>NO</s>, <|endoftext|>)
+    c = re.sub(r'<[^>]+>', ' ', c)
+    c = ' '.join(c.split()).lower()
 
     def _longest_first(text: str) -> Optional[str]:
         for opt in sorted(options, key=len, reverse=True):
@@ -479,6 +483,16 @@ def _parse_single_choice(content: str, options: List[str], map_to: Optional[Dict
     # Try first sentence only (before first period or newline)
     parts = re.split(r'[.\n]', c)
     first = parts[0].strip() if parts else ""
+
+    # Fix "optionA or optionB" → prefer optionB (model's refined/conservative answer)
+    # e.g. "coworkers or other (no possessive)" → "other"
+    for _o1 in sorted(options, key=len, reverse=True):
+        for _o2 in sorted(options, key=len, reverse=True):
+            if _o1.lower() != _o2.lower():
+                if (_o1.lower() + ' or ' + _o2.lower()) in first:
+                    _m = _o2.lower()
+                    return map_to.get(_m, _m) if map_to else _m
+
     match = _longest_first(first)
     if match:
         return map_to.get(match, match) if map_to else match
